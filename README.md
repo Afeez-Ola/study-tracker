@@ -13,6 +13,7 @@
 - 🔒 **Privacy-first approach** - all data stored locally on your device
 - 🔧 **Production-ready** with comprehensive configuration management
 - 🛡️ **Security features** with input validation and sanitization
+- 🔄 **Auto-update system** - Stay current with latest features automatically
 
 ## 🏗️ Architecture
 
@@ -133,6 +134,61 @@ python run.py
 # Debug mode: OFF
 # Performance optimized
 # Logs saved to file
+```
+
+### 🔄 Auto-Update System
+
+Study Tracker includes an **automatic update system** that keeps your installation current without manual reinstallation.
+
+#### Checking for Updates
+
+```bash
+# Check if updates are available
+python update.py --check
+
+# Interactive update (recommended)
+python update.py
+
+# Automatic update without prompts
+python update.py --auto
+
+# Force update even if no changes detected
+python update.py --force
+```
+
+#### What the Updater Does
+
+1. **🔍 Checks GitHub** for latest version
+2. **💾 Creates backup** of current installation
+3. **📥 Downloads updates** from repository
+4. **📦 Updates dependencies** if needed
+5. **🗄️ Handles database migrations** automatically
+6. **✅ Verifies installation** integrity
+
+#### Update Safety Features
+
+- ✅ **Automatic backups** before any changes
+- ✅ **Database preservation** - your data is never lost
+- ✅ **Rollback capability** - restore from backup if needed
+- ✅ **Version tracking** - knows what's installed vs available
+- ✅ **Dependency management** - updates Python packages automatically
+
+#### Manual Update (Alternative)
+
+If you prefer manual control:
+
+```bash
+# Navigate to project directory
+cd study-tracker
+
+# Pull latest changes
+git pull origin main
+
+# Update dependencies
+pip install -r requirements.txt --upgrade
+
+# Restart application
+python run.py
 ```
 
 ## 🎯 How to Use
