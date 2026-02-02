@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Study Tracker - Desktop Edition</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #0d1117;
+            color: #c9d1d9;
+            padding: 40px 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: #58a6ff;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .subtitle {
+            color: #8b949e;
+            font-size: 1.1em;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .db-info {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 20px;
+            text-align: center;
+            color: #8b949e;
+            font-size: 0.9em;
+        }
+
+        .input-section {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 25px;
+            margin-bottom: 20px;
+        }
+
+        .input-label {
+            font-weight: 600;
+            margin-bottom: 10px;
+            display: block;
+            color: #c9d1d9;
+        }
+
+        .input-field {
+            width: 100%;
+            padding: 12px;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            color: #c9d1d9;
+            font-size: 1em;
+        }
+
+        .input-field:focus {
+            outline: none;
+            border-color: #58a6ff;
+        }
+
+        .timer-section {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .timer-display {
+            font-size: 4em;
+            font-weight: bold;
+            color: #58a6ff;
+            margin: 20px 0;
+        }
+
+        .status-text {
+            font-size: 1.2em;
+            color: #8b949e;
+            margin-bottom: 20px;
+        }
+
+        .status-text.active {
+            color: #3fb950;
+        }
+
+        .activity-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: #0d1117;
+            padding: 12px 24px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+
+        .activity-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #30363d;
+        }
+
+        .activity-dot.active {
+            background: #3fb950;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin: 20px 0;
+        }
+
+        .btn {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-start {
+            background: #238636;
+            color: white;
+        }
+
+        .btn-start:hover:not(:disabled) {
+            background: #2ea043;
+        }
+
+        .btn-pause {
+            background: #bb8009;
+            color: white;
+        }
+
+        .btn-pause:hover:not(:disabled) {
+            background: #d29922;
+        }
+
+        .btn-stop {
+            background: #da3633;
+            color: white;
+        }
+
+        .btn-stop:hover:not(:disabled) {
+            background: #f85149;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .stat-label {
+            color: #8b949e;
+            font-size: 0.9em;
+            margin-bottom: 10px;
+        }
+
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #58a6ff;
+        }
+
+        .data-controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin: 20px 0;
+        }
+
+        .btn-data {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            color: white;
+        }
+
+        .btn-export { background: #238636; }
+        .btn-import { background: #1f6feb; }
+        .btn-stats { background: #8957e5; }
+
+        .btn-data:hover {
+            opacity: 0.8;
+        }
+
+        .history-section {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 25px;
+            margin-top: 20px;
+        }
+
+        .history-title {
+            font-size: 1.2em;
+            margin-bottom: 15px;
+            color: #c9d1d9;
+        }
+
+        .session-card {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 10px;
+        }
+
+        .session-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .session-topic {
+            color: #58a6ff;
+            font-weight: 600;
+        }
+
+        .session-meta {
+            color: #8b949e;
+            font-size: 0.9em;
+        }
+
+        .productivity-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+
+        .productivity-badge.high {
+            background: rgba(63, 185, 80, 0.2);
+            color: #3fb950;
+        }
+
+        .productivity-badge.medium {
+            background: rgba(187, 128, 9, 0.2);
+            color: #d29922;
+        }
+
+        .productivity-badge.low {
+            background: rgba(248, 81, 73, 0.2);
+            color: #f85149;
+        }
+
+        .warning-box {
+            background: rgba(187, 128, 9, 0.1);
+            border: 1px solid #bb8009;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+
+        .warning-box p {
+            color: #d29922;
+            line-height: 1.6;
+        }
+
+        #importFile {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⏱️ Study Tracker - Desktop Edition</h1>
+        <p class="subtitle">System-wide activity tracking with local database storage</p>
+
+        <div class="db-info">
+            📁 Database Location: {{ db_path }}
+        </div>
+
+        <div class="input-section">
+            <label class="input-label">What are you studying?</label>
+            <input type="text" id="topicInput" class="input-field" placeholder="e.g., Python Programming, Biology Chapter 5">
+        </div>
+
+        <div class="timer-section">
+            <div class="timer-display" id="timerDisplay">00:00:00</div>
+            <div class="status-text" id="statusText">Ready to start tracking</div>
+            
+            <div class="activity-indicator">
+                <div class="activity-dot" id="activityDot"></div>
+                <span id="activityText">Waiting for activity...</span>
+            </div>
+
+            <div class="controls">
+                <button class="btn btn-start" id="startBtn" onclick="startSession()">Start Session</button>
+                <button class="btn btn-pause" id="pauseBtn" onclick="pauseSession()" disabled>Pause</button>
+                <button class="btn btn-stop" id="stopBtn" onclick="stopSession()" disabled>Finish Session</button>
+            </div>
+
+            <div class="warning-box">
+                <p><strong>How it works:</strong> The tracker monitors your keyboard and mouse across your ENTIRE computer (not just this browser). If you're idle for more than 3 seconds, it pauses automatically. Only actual work time is counted!</p>
+            </div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">Active Time</div>
+                <div class="stat-value" id="activeTime">0m</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Idle Time</div>
+                <div class="stat-value" id="idleTime">0m</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Productivity</div>
+                <div class="stat-value" id="productivity">0%</div>
+            </div>
+        </div>
+
+        <div class="data-controls">
+            <button class="btn-data btn-export" onclick="exportCSV()">📥 Export to CSV</button>
+            <button class="btn-data btn-import" onclick="document.getElementById('importFile').click()">📤 Import from CSV</button>
+            <button class="btn-data btn-stats" onclick="showStats()">📊 View Stats</button>
+            <input type="file" id="importFile" accept=".csv" onchange="importCSV(event)">
+        </div>
+
+        <div class="history-section">
+            <div class="history-title">Recent Study Sessions</div>
+            <div id="sessionHistory"></div>
+        </div>
+    </div>
+
+    <script>
+        let updateInterval = null;
+
+        function startSession() {
+            const topic = document.getElementById('topicInput').value.trim();
+            if (!topic) {
+                alert('Please enter what you\'re studying!');
+                return;
+            }
+
+            fetch('/start_session', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({topic: topic})
+            }).then(r => r.json()).then(data => {
+                if (data.success) {
+                    document.getElementById('startBtn').disabled = true;
+                    document.getElementById('pauseBtn').disabled = false;
+                    document.getElementById('stopBtn').disabled = false;
+                    document.getElementById('topicInput').disabled = true;
+                    document.getElementById('statusText').textContent = 'Session in progress...';
+                    document.getElementById('statusText').classList.add('active');
+                    
+                    updateInterval = setInterval(updateStatus, 1000);
+                }
+            });
+        }
+
+        function pauseSession() {
+            fetch('/pause_session', {method: 'POST'})
+                .then(r => r.json())
+                .then(data => {
+                    const btn = document.getElementById('pauseBtn');
+                    if (data.paused) {
+                        btn.textContent = 'Resume';
+                        document.getElementById('statusText').textContent = 'Session paused';
+                        document.getElementById('statusText').classList.remove('active');
+                    } else {
+                        btn.textContent = 'Pause';
+                        document.getElementById('statusText').textContent = 'Session in progress...';
+                        document.getElementById('statusText').classList.add('active');
+                    }
+                });
+        }
+
+        function stopSession() {
+            fetch('/stop_session', {method: 'POST'})
+                .then(r => r.json())
+                .then(data => {
+                    clearInterval(updateInterval);
+                    
+                    document.getElementById('startBtn').disabled = false;
+                    document.getElementById('pauseBtn').disabled = true;
+                    document.getElementById('stopBtn').disabled = true;
+                    document.getElementById('pauseBtn').textContent = 'Pause';
+                    document.getElementById('topicInput').disabled = false;
+                    document.getElementById('topicInput').value = '';
+                    document.getElementById('statusText').textContent = '✓ Session complete! Great work!';
+                    document.getElementById('statusText').classList.remove('active');
+                    document.getElementById('activityDot').classList.remove('active');
+                    document.getElementById('activityText').textContent = 'Waiting for activity...';
+                    
+                    document.getElementById('timerDisplay').textContent = '00:00:00';
+                    document.getElementById('activeTime').textContent = '0m';
+                    document.getElementById('idleTime').textContent = '0m';
+                    document.getElementById('productivity').textContent = '0%';
+                    
+                    alert(`Session Saved!\n\nTopic: ${data.topic}\nActive Time: ${data.active_minutes}m\nProductivity: ${data.productivity}%`);
+                    
+                    loadSessions();
+                });
+        }
+
+        function updateStatus() {
+            fetch('/get_status')
+                .then(r => r.json())
+                .then(data => {
+                    const hours = Math.floor(data.total_seconds / 3600);
+                    const minutes = Math.floor((data.total_seconds % 3600) / 60);
+                    const seconds = data.total_seconds % 60;
+                    
+                    document.getElementById('timerDisplay').textContent = 
+                        `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                    
+                    document.getElementById('activeTime').textContent = Math.floor(data.active_seconds / 60) + 'm';
+                    document.getElementById('idleTime').textContent = Math.floor(data.idle_seconds / 60) + 'm';
+                    document.getElementById('productivity').textContent = data.productivity + '%';
+                    
+                    const dot = document.getElementById('activityDot');
+                    const text = document.getElementById('activityText');
+                    
+                    if (data.currently_active) {
+                        dot.classList.add('active');
+                        text.textContent = 'Active - Studying detected!';
+                    } else {
+                        dot.classList.remove('active');
+                        text.textContent = 'Idle - No activity detected';
+                    }
+                });
+        }
+
+        function loadSessions() {
+            fetch('/get_sessions')
+                .then(r => r.json())
+                .then(sessions => {
+                    const container = document.getElementById('sessionHistory');
+                    
+                    if (sessions.length === 0) {
+                        container.innerHTML = '<p style="color: #8b949e; text-align: center;">No sessions yet. Start tracking to build your history!</p>';
+                        return;
+                    }
+                    
+                    container.innerHTML = sessions.map(s => {
+                        let badge_class = 'medium';
+                        if (s.productivity >= 70) badge_class = 'high';
+                        else if (s.productivity < 50) badge_class = 'low';
+                        
+                        return `
+                            <div class="session-card">
+                                <div class="session-header">
+                                    <div>
+                                        <span class="session-topic">${s.topic}</span>
+                                        <span class="productivity-badge ${badge_class}">${s.productivity}% productive</span>
+                                    </div>
+                                    <span class="session-meta">${s.date}</span>
+                                </div>
+                                <div class="session-meta">
+                                    Active: ${s.active_minutes}m | Idle: ${s.idle_minutes}m | Total: ${s.total_minutes}m
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                });
+        }
+
+        function exportCSV() {
+            window.location.href = '/export_csv';
+        }
+
+        function importCSV(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            fetch('/import_csv', {
+                method: 'POST',
+                body: formData
+            }).then(r => r.json()).then(data => {
+                if (data.success) {
+                    alert(data.message);
+                    loadSessions();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            });
+        }
+
+        function showStats() {
+            fetch('/get_stats')
+                .then(r => r.json())
+                .then(stats => {
+                    const hours = Math.floor(stats.total_active_minutes / 60);
+                    alert(`📊 Your Study Statistics\n\n` +
+                          `Total Sessions: ${stats.total_sessions}\n` +
+                          `Total Active Time: ${stats.total_active_minutes} minutes (${hours} hours)\n` +
+                          `Average Productivity: ${stats.avg_productivity}%\n` +
+                          `Current Streak: ${stats.streak} days 🔥`);
+                });
+        }
+
+        // Load sessions on page load
+        loadSessions();
+    </script>
+</body>
+</html>

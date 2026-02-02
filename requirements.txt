@@ -1,0 +1,9 @@
+flask==2.3.3
+pynput==1.7.6
+sqlalchemy==2.0.21
+alembic==1.12.0
+python-dotenv==1.0.0
+werkzeug==2.3.7
+pytest==7.4.2
+pytest-flask==1.2.0
+requests==2.31.0
