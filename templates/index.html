@@ -47,6 +47,7 @@
             text-align: center;
             margin-bottom: 40px;
             padding: 20px 0;
+            position: relative;
         }
 
         .header h1 {
@@ -61,6 +62,101 @@
             color: var(--text-secondary);
             font-size: 0.9rem;
             font-weight: 400;
+        }
+
+        /* Auth Buttons in Header */
+        .auth-buttons {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .user-menu {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .user-name {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        /* Auth Modal */
+        .auth-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 3000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .auth-modal.active {
+            display: flex;
+        }
+
+        .auth-form-container {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 40px;
+            max-width: 450px;
+            width: 90%;
+            box-shadow: var(--shadow-hover);
+        }
+
+        .auth-tabs {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 30px;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .auth-tab {
+            padding: 10px 0;
+            font-size: 1.1rem;
+            font-weight: 500;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            transition: all 0.2s;
+        }
+
+        .auth-tab.active {
+            color: var(--accent-primary);
+            border-bottom-color: var(--accent-primary);
+        }
+
+        .auth-form {
+            display: none;
+        }
+
+        .auth-form.active {
+            display: block;
+        }
+
+        .auth-error {
+            color: var(--accent-danger);
+            font-size: 0.85rem;
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(231, 76, 60, 0.1);
+            border-radius: 6px;
+            display: none;
+        }
+
+        .auth-error.active {
+            display: block;
         }
 
         /* Cards - Clean & Minimal */
@@ -667,6 +763,18 @@
         <div class="header">
             <h1>Study Tracker</h1>
             <p>Track your productivity and build better habits</p>
+            
+            <!-- Auth Buttons (shown when logged out) -->
+            <div class="auth-buttons" id="authButtons">
+                <button class="btn btn-secondary btn-small" onclick="showAuthModal('login')">Log In</button>
+                <button class="btn btn-primary btn-small" onclick="showAuthModal('register')">Sign Up</button>
+            </div>
+            
+            <!-- User Menu (shown when logged in) -->
+            <div class="user-menu" id="userMenu" style="display: none;">
+                <span class="user-name" id="userNameDisplay"></span>
+                <button class="btn btn-secondary btn-small" onclick="logout()">Logout</button>
+            </div>
         </div>
 
         <!-- Database Info -->
@@ -802,6 +910,56 @@
                 <div class="form-actions">
                     <button class="btn btn-secondary" onclick="closeUploadForm()">Cancel</button>
                     <button class="btn btn-primary" id="uploadSubmitBtn" onclick="submitUpload()">Upload</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Auth Modal (Login/Register) -->
+        <div id="authModal" class="auth-modal">
+            <div class="auth-form-container">
+                <div class="auth-tabs">
+                    <div class="auth-tab active" id="loginTab" onclick="switchAuthTab('login')">Log In</div>
+                    <div class="auth-tab" id="registerTab" onclick="switchAuthTab('register')">Sign Up</div>
+                </div>
+
+                <!-- Login Form -->
+                <div class="auth-form active" id="loginForm">
+                    <div class="input-group">
+                        <label>Email *</label>
+                        <input type="email" id="loginEmail" class="input-field" placeholder="your@email.com">
+                    </div>
+                    <div class="input-group" style="margin-top: 15px;">
+                        <label>Password *</label>
+                        <input type="password" id="loginPassword" class="input-field" placeholder="Enter your password">
+                    </div>
+                    <div class="auth-error" id="loginError"></div>
+                    <div style="margin-top: 20px;">
+                        <button class="btn btn-primary" style="width: 100%;" onclick="submitLogin()">Log In</button>
+                    </div>
+                </div>
+
+                <!-- Register Form -->
+                <div class="auth-form" id="registerForm">
+                    <div class="input-group">
+                        <label>Email *</label>
+                        <input type="email" id="registerEmail" class="input-field" placeholder="your@email.com">
+                    </div>
+                    <div class="input-group" style="margin-top: 15px;">
+                        <label>Username</label>
+                        <input type="text" id="registerUsername" class="input-field" placeholder="Choose a username (optional)">
+                    </div>
+                    <div class="input-group" style="margin-top: 15px;">
+                        <label>Password *</label>
+                        <input type="password" id="registerPassword" class="input-field" placeholder="Create a password (min 8 chars)">
+                    </div>
+                    <div class="auth-error" id="registerError"></div>
+                    <div style="margin-top: 20px;">
+                        <button class="btn btn-primary" style="width: 100%;" onclick="submitRegister()">Sign Up</button>
+                    </div>
+                </div>
+
+                <div style="text-align: center; margin-top: 20px;">
+                    <button class="btn btn-secondary" onclick="closeAuthModal()">Cancel</button>
                 </div>
             </div>
         </div>
@@ -1157,13 +1315,35 @@
                 });
         }
 
-        function downloadMaterial(materialId) {
+        function downloadMaterial(materialId, isPublic = true) {
+            // Check auth for protected materials
+            if (!isPublic) {
+                const token = localStorage.getItem('authToken');
+                if (!token) {
+                    showAuthModal('login');
+                    setTimeout(() => {
+                        showAuthError('login', 'Please log in to download this material');
+                    }, 100);
+                    return;
+                }
+            }
             window.open(`/materials/${materialId}/download`, '_blank');
         }
 
         let selectedFile = null;
 
         function showUploadForm() {
+            // Check if user is authenticated
+            const token = localStorage.getItem('authToken');
+            if (!token) {
+                showAuthModal('login');
+                // Show message in auth modal after a brief delay
+                setTimeout(() => {
+                    showAuthError('login', 'Please log in to upload materials');
+                }, 100);
+                return;
+            }
+
             // Reset form
             selectedFile = null;
             document.getElementById('fileInput').value = '';
@@ -1174,7 +1354,7 @@
             document.getElementById('fileInputWrapper').classList.remove('has-file');
             document.getElementById('uploadProgress').classList.remove('active');
             document.getElementById('progressFill').style.width = '0%';
-            
+
             // Show modal
             document.getElementById('uploadModal').classList.add('active');
         }
@@ -1286,9 +1466,15 @@
             formData.append('tags', tags);
             formData.append('is_public', 'true');
             
+            // Get auth token
+            const token = localStorage.getItem('authToken');
+
             // Upload
             fetch('/materials/upload', {
                 method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer ' + token
+                },
                 body: formData
             })
             .then(r => r.json())
@@ -1326,6 +1512,198 @@
 
         // Load materials on page load
         loadMaterials();
+
+        // ==================== AUTHENTICATION FUNCTIONS ====================
+
+        let authToken = null;
+
+        function checkAuthStatus() {
+            const token = localStorage.getItem('authToken');
+            if (!token) {
+                showLoggedOutState();
+                return;
+            }
+
+            authToken = token;
+            fetch('/auth/me', {
+                headers: {
+                    'Authorization': 'Bearer ' + token
+                }
+            })
+            .then(r => {
+                if (r.status === 401) {
+                    localStorage.removeItem('authToken');
+                    authToken = null;
+                    showLoggedOutState();
+                    return null;
+                }
+                return r.json();
+            })
+            .then(data => {
+                if (data && data.user) {
+                    showLoggedInState(data.user);
+                } else {
+                    showLoggedOutState();
+                }
+            })
+            .catch(err => {
+                console.error('Auth check failed:', err);
+                showLoggedOutState();
+            });
+        }
+
+        function showLoggedInState(user) {
+            document.getElementById('authButtons').style.display = 'none';
+            document.getElementById('userMenu').style.display = 'flex';
+            document.getElementById('userNameDisplay').textContent = user.username || user.email;
+        }
+
+        function showLoggedOutState() {
+            document.getElementById('authButtons').style.display = 'flex';
+            document.getElementById('userMenu').style.display = 'none';
+            document.getElementById('userNameDisplay').textContent = '';
+        }
+
+        function showAuthModal(tab) {
+            document.getElementById('authModal').classList.add('active');
+            switchAuthTab(tab);
+        }
+
+        function closeAuthModal() {
+            document.getElementById('authModal').classList.remove('active');
+        }
+
+        function switchAuthTab(tab) {
+            const loginTab = document.getElementById('loginTab');
+            const registerTab = document.getElementById('registerTab');
+            const loginForm = document.getElementById('loginForm');
+            const registerForm = document.getElementById('registerForm');
+
+            if (tab === 'login') {
+                loginTab.classList.add('active');
+                registerTab.classList.remove('active');
+                loginForm.classList.add('active');
+                registerForm.classList.remove('active');
+            } else {
+                loginTab.classList.remove('active');
+                registerTab.classList.add('active');
+                loginForm.classList.remove('active');
+                registerForm.classList.add('active');
+            }
+
+            document.getElementById('loginError').classList.remove('active');
+            document.getElementById('registerError').classList.remove('active');
+        }
+
+        function submitLogin() {
+            const email = document.getElementById('loginEmail').value.trim();
+            const password = document.getElementById('loginPassword').value;
+
+            if (!email || !password) {
+                showAuthError('login', 'Please enter both email and password');
+                return;
+            }
+
+            fetch('/auth/login', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({email, password})
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success && data.token) {
+                    localStorage.setItem('authToken', data.token);
+                    authToken = data.token;
+                    closeAuthModal();
+                    showLoggedInState(data.user);
+                    alert('Login successful! Welcome back, ' + (data.user.username || data.user.email));
+                    document.getElementById('loginEmail').value = '';
+                    document.getElementById('loginPassword').value = '';
+                } else {
+                    showAuthError('login', data.error || 'Login failed');
+                }
+            })
+            .catch(err => {
+                console.error('Login error:', err);
+                showAuthError('login', 'Login failed. Please try again.');
+            });
+        }
+
+        function submitRegister() {
+            const email = document.getElementById('registerEmail').value.trim();
+            const username = document.getElementById('registerUsername').value.trim();
+            const password = document.getElementById('registerPassword').value;
+
+            if (!email || !password) {
+                showAuthError('register', 'Please enter email and password');
+                return;
+            }
+
+            if (password.length < 8) {
+                showAuthError('register', 'Password must be at least 8 characters');
+                return;
+            }
+
+            fetch('/auth/register', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({email, username, password})
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success && data.token) {
+                    localStorage.setItem('authToken', data.token);
+                    authToken = data.token;
+                    closeAuthModal();
+                    showLoggedInState(data.user);
+                    alert('Registration successful! Welcome, ' + (data.user.username || data.user.email));
+                    document.getElementById('registerEmail').value = '';
+                    document.getElementById('registerUsername').value = '';
+                    document.getElementById('registerPassword').value = '';
+                } else {
+                    showAuthError('register', data.error || 'Registration failed');
+                }
+            })
+            .catch(err => {
+                console.error('Registration error:', err);
+                showAuthError('register', 'Registration failed. Please try again.');
+            });
+        }
+
+        function showAuthError(form, message) {
+            const errorEl = document.getElementById(form + 'Error');
+            errorEl.textContent = message;
+            errorEl.classList.add('active');
+        }
+
+        function logout() {
+            const token = localStorage.getItem('authToken');
+            const headers = {'Content-Type': 'application/json'};
+            if (token) {
+                headers['Authorization'] = 'Bearer ' + token;
+            }
+
+            fetch('/auth/logout', {
+                method: 'POST',
+                headers: headers
+            })
+            .then(r => r.json())
+            .then(data => {
+                localStorage.removeItem('authToken');
+                authToken = null;
+                showLoggedOutState();
+                alert('You have been logged out.');
+            })
+            .catch(err => {
+                console.error('Logout error:', err);
+                localStorage.removeItem('authToken');
+                authToken = null;
+                showLoggedOutState();
+            });
+        }
+
+        // Check auth status on page load
+        checkAuthStatus();
     </script>
 </body>
 </html>
