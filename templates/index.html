@@ -550,6 +550,115 @@
             text-transform: uppercase;
             margin-right: 8px;
         }
+
+        /* Upload Form Modal */
+        .upload-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .upload-modal.active {
+            display: flex;
+        }
+
+        .upload-form-container {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 30px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: var(--shadow-hover);
+        }
+
+        .upload-form-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: var(--text-primary);
+        }
+
+        .file-input-wrapper {
+            border: 2px dashed var(--border-color);
+            border-radius: 8px;
+            padding: 30px;
+            text-align: center;
+            margin-bottom: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .file-input-wrapper:hover {
+            border-color: var(--accent-primary);
+            background: var(--bg-tertiary);
+        }
+
+        .file-input-wrapper.has-file {
+            border-color: var(--accent-secondary);
+            background: rgba(46, 204, 113, 0.1);
+        }
+
+        .file-input-text {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .file-input-text strong {
+            color: var(--accent-primary);
+        }
+
+        .selected-file {
+            margin-top: 10px;
+            padding: 10px;
+            background: var(--bg-tertiary);
+            border-radius: 6px;
+            font-size: 0.85rem;
+            display: none;
+        }
+
+        .selected-file.active {
+            display: block;
+        }
+
+        .upload-progress {
+            margin-top: 20px;
+            display: none;
+        }
+
+        .upload-progress.active {
+            display: block;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: var(--border-color);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--accent-primary);
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
     </style>
 </head>
 <body>
@@ -650,6 +759,50 @@
             <div class="section-title">Recent Sessions</div>
             <div id="sessionHistory" class="session-list">
                 <!-- Sessions will be loaded here -->
+            </div>
+        </div>
+
+        <!-- Upload Modal -->
+        <div id="uploadModal" class="upload-modal">
+            <div class="upload-form-container">
+                <div class="upload-form-title">Upload Study Material</div>
+                
+                <div class="file-input-wrapper" id="fileInputWrapper" onclick="document.getElementById('fileInput').click()">
+                    <div class="file-input-text">
+                        <strong>Click to select file</strong><br>
+                        or drag and drop here<br>
+                        <small style="color: #999;">PDF, DOC, DOCX, TXT, PPT, XLS (max 10MB)</small>
+                    </div>
+                    <input type="file" id="fileInput" style="display: none;" accept=".pdf,.doc,.docx,.txt,.md,.ppt,.pptx,.xls,.xlsx">
+                    <div class="selected-file" id="selectedFile"></div>
+                </div>
+
+                <div class="input-group">
+                    <label>Title *</label>
+                    <input type="text" id="uploadTitle" class="input-field" placeholder="Enter material title">
+                </div>
+
+                <div class="input-group" style="margin-top: 15px;">
+                    <label>Description</label>
+                    <textarea id="uploadDescription" class="input-field" rows="3" placeholder="Enter description (optional)" style="resize: vertical;"></textarea>
+                </div>
+
+                <div class="input-group" style="margin-top: 15px;">
+                    <label>Subject Tags (comma-separated)</label>
+                    <input type="text" id="uploadTags" class="input-field" placeholder="e.g., Math, Calculus, Exam Prep">
+                </div>
+
+                <div class="upload-progress" id="uploadProgress">
+                    <div>Uploading...</div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button class="btn btn-secondary" onclick="closeUploadForm()">Cancel</button>
+                    <button class="btn btn-primary" id="uploadSubmitBtn" onclick="submitUpload()">Upload</button>
+                </div>
             </div>
         </div>
     </div>
@@ -1008,50 +1161,160 @@
             window.open(`/materials/${materialId}/download`, '_blank');
         }
 
+        let selectedFile = null;
+
         function showUploadForm() {
-            // Simple prompt-based upload for now
-            const title = prompt('Enter material title:');
-            if (!title) return;
-
-            const description = prompt('Enter description (optional):') || '';
-            const tags = prompt('Enter subject tags (comma-separated):') || '';
-
-            // Create a hidden file input
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = '.pdf,.doc,.docx,.txt,.md,.ppt,.pptx,.xls,.xlsx';
-            input.onchange = (e) => {
-                const file = e.target.files[0];
-                if (file) {
-                    uploadFile(file, title, description, tags);
-                }
-            };
-            input.click();
+            // Reset form
+            selectedFile = null;
+            document.getElementById('fileInput').value = '';
+            document.getElementById('uploadTitle').value = '';
+            document.getElementById('uploadDescription').value = '';
+            document.getElementById('uploadTags').value = '';
+            document.getElementById('selectedFile').classList.remove('active');
+            document.getElementById('fileInputWrapper').classList.remove('has-file');
+            document.getElementById('uploadProgress').classList.remove('active');
+            document.getElementById('progressFill').style.width = '0%';
+            
+            // Show modal
+            document.getElementById('uploadModal').classList.add('active');
         }
 
-        function uploadFile(file, title, description, tags) {
+        function closeUploadForm() {
+            document.getElementById('uploadModal').classList.remove('active');
+        }
+
+        // Handle file selection
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                selectedFile = file;
+                
+                // Show file info
+                const fileSize = (file.size / 1024 / 1024).toFixed(2);
+                document.getElementById('selectedFile').innerHTML = 
+                    `<strong>${file.name}</strong> (${fileSize} MB)`;
+                document.getElementById('selectedFile').classList.add('active');
+                document.getElementById('fileInputWrapper').classList.add('has-file');
+                
+                // Auto-fill title if empty
+                if (!document.getElementById('uploadTitle').value) {
+                    const fileName = file.name.replace(/\.[^/.]+$/, "");
+                    document.getElementById('uploadTitle').value = fileName;
+                }
+            }
+        });
+
+        // Handle drag and drop
+        const fileWrapper = document.getElementById('fileInputWrapper');
+        
+        fileWrapper.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            fileWrapper.style.borderColor = 'var(--accent-primary)';
+        });
+        
+        fileWrapper.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            fileWrapper.style.borderColor = '';
+        });
+        
+        fileWrapper.addEventListener('drop', (e) => {
+            e.preventDefault();
+            fileWrapper.style.borderColor = '';
+            
+            const file = e.dataTransfer.files[0];
+            if (file) {
+                selectedFile = file;
+                
+                // Check file type
+                const allowedTypes = ['.pdf', '.doc', '.docx', '.txt', '.md', '.ppt', '.pptx', '.xls', '.xlsx'];
+                const ext = '.' + file.name.split('.').pop().toLowerCase();
+                if (!allowedTypes.includes(ext)) {
+                    alert('Invalid file type. Allowed: PDF, DOC, DOCX, TXT, PPT, XLS');
+                    return;
+                }
+                
+                // Show file info
+                const fileSize = (file.size / 1024 / 1024).toFixed(2);
+                document.getElementById('selectedFile').innerHTML = 
+                    `<strong>${file.name}</strong> (${fileSize} MB)`;
+                document.getElementById('selectedFile').classList.add('active');
+                document.getElementById('fileInputWrapper').classList.add('has-file');
+                
+                // Auto-fill title
+                if (!document.getElementById('uploadTitle').value) {
+                    const fileName = file.name.replace(/\.[^/.]+$/, "");
+                    document.getElementById('uploadTitle').value = fileName;
+                }
+            }
+        });
+
+        function submitUpload() {
+            if (!selectedFile) {
+                alert('Please select a file first');
+                return;
+            }
+            
+            const title = document.getElementById('uploadTitle').value.trim();
+            if (!title) {
+                alert('Please enter a title');
+                document.getElementById('uploadTitle').focus();
+                return;
+            }
+            
+            const description = document.getElementById('uploadDescription').value.trim();
+            const tags = document.getElementById('uploadTags').value.trim();
+            
+            // Show progress
+            document.getElementById('uploadProgress').classList.add('active');
+            document.getElementById('uploadSubmitBtn').disabled = true;
+            document.getElementById('uploadSubmitBtn').textContent = 'Uploading...';
+            
+            // Simulate progress
+            let progress = 0;
+            const progressInterval = setInterval(() => {
+                progress += 10;
+                if (progress <= 90) {
+                    document.getElementById('progressFill').style.width = progress + '%';
+                }
+            }, 200);
+            
+            // Create form data
             const formData = new FormData();
-            formData.append('file', file);
+            formData.append('file', selectedFile);
             formData.append('title', title);
             formData.append('description', description);
             formData.append('tags', tags);
             formData.append('is_public', 'true');
-
+            
+            // Upload
             fetch('/materials/upload', {
                 method: 'POST',
                 body: formData
             })
             .then(r => r.json())
             .then(data => {
+                clearInterval(progressInterval);
+                document.getElementById('progressFill').style.width = '100%';
+                
                 if (data.success) {
-                    alert('Material uploaded successfully!');
-                    loadMaterials();
+                    setTimeout(() => {
+                        alert('✅ Material uploaded successfully!');
+                        closeUploadForm();
+                        loadMaterials();
+                    }, 500);
                 } else {
-                    alert('Error: ' + (data.error || 'Upload failed'));
+                    alert('❌ Error: ' + (data.error || 'Upload failed'));
+                    document.getElementById('uploadSubmitBtn').disabled = false;
+                    document.getElementById('uploadSubmitBtn').textContent = 'Upload';
+                    document.getElementById('uploadProgress').classList.remove('active');
                 }
             })
             .catch(err => {
-                alert('Upload failed: ' + err.message);
+                clearInterval(progressInterval);
+                alert('❌ Upload failed: ' + err.message);
+                document.getElementById('uploadSubmitBtn').disabled = false;
+                document.getElementById('uploadSubmitBtn').textContent = 'Upload';
+                document.getElementById('uploadProgress').classList.remove('active');
             });
         }
 
