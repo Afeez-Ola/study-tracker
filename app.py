@@ -1055,6 +1055,211 @@ def get_popular_tags():
         return create_error_response("Failed to get tags", 500)
 
 
+# ==================== STUDY BUDDY ROUTES ====================
+
+from study_buddy import StudyBuddySystem, get_study_buddy_system
+
+buddy_system = StudyBuddySystem()
+
+
+@app.route("/buddies/nearby", methods=["GET"])
+@require_auth
+def find_nearby_buddies():
+    """Find nearby study buddies based on location"""
+    try:
+        user_id = get_current_user_id()
+        radius_km = request.args.get("radius", 10, type=float)
+        limit = min(request.args.get("limit", 20, type=int), 50)
+        min_compatibility = request.args.get("min_compatibility", 0, type=float)
+
+        # Limit radius
+        radius_km = min(radius_km, 100)  # Max 100km
+
+        nearby_users = buddy_system.find_nearby_users(
+            user_id=user_id,
+            radius_km=radius_km,
+            limit=limit,
+            min_compatibility=min_compatibility,
+        )
+
+        return jsonify(
+            create_success_response(
+                {
+                    "users": nearby_users,
+                    "radius_km": radius_km,
+                    "count": len(nearby_users),
+                }
+            )
+        )
+
+    except Exception as e:
+        logger.error(f"Error finding nearby buddies: {e}")
+        return create_error_response("Failed to find nearby users", 500)
+
+
+@app.route("/buddies/location", methods=["PUT"])
+@require_auth
+def update_location():
+    """Update user's location for nearby discovery"""
+    try:
+        if not request.is_json:
+            return create_error_response("Request must be JSON", 400)
+
+        data = request.get_json()
+        user_id = get_current_user_id()
+
+        lat = data.get("lat")
+        lon = data.get("lon")
+        city = data.get("city", "").strip()
+        country = data.get("country", "").strip()
+
+        if lat is None or lon is None:
+            return create_error_response("Latitude and longitude are required", 400)
+
+        # Validate coordinates
+        if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
+            return create_error_response("Invalid coordinates", 400)
+
+        if buddy_system.update_user_location(user_id, lat, lon, city, country):
+            return jsonify(
+                create_success_response({"message": "Location updated successfully"})
+            )
+        else:
+            return create_error_response("Failed to update location", 500)
+
+    except Exception as e:
+        logger.error(f"Error updating location: {e}")
+        return create_error_response("Update failed", 500)
+
+
+@app.route("/buddies/request", methods=["POST"])
+@require_auth
+def send_buddy_request():
+    """Send a study buddy request"""
+    try:
+        if not request.is_json:
+            return create_error_response("Request must be JSON", 400)
+
+        data = request.get_json()
+        requester_id = get_current_user_id()
+        recipient_id = data.get("user_id", "").strip()
+        message = data.get("message", "").strip()
+
+        if not recipient_id:
+            return create_error_response("Recipient user ID is required", 400)
+
+        if recipient_id == requester_id:
+            return create_error_response("Cannot send request to yourself", 400)
+
+        result = buddy_system.send_buddy_request(requester_id, recipient_id, message)
+
+        if result["success"]:
+            return jsonify(
+                create_success_response(
+                    {
+                        "message": result["message"],
+                        "compatibility": result.get("compatibility"),
+                    }
+                )
+            )
+        else:
+            return create_error_response(result["error"], 400)
+
+    except Exception as e:
+        logger.error(f"Error sending buddy request: {e}")
+        return create_error_response("Request failed", 500)
+
+
+@app.route("/buddies/requests", methods=["GET"])
+@require_auth
+def get_buddy_requests():
+    """Get pending buddy requests"""
+    try:
+        user_id = get_current_user_id()
+        requests = buddy_system.get_buddy_requests(user_id)
+
+        return jsonify(
+            create_success_response({"requests": requests, "count": len(requests)})
+        )
+
+    except Exception as e:
+        logger.error(f"Error getting buddy requests: {e}")
+        return create_error_response("Failed to get requests", 500)
+
+
+@app.route("/buddies/respond", methods=["POST"])
+@require_auth
+def respond_to_request():
+    """Accept or reject a buddy request"""
+    try:
+        if not request.is_json:
+            return create_error_response("Request must be JSON", 400)
+
+        data = request.get_json()
+        user_id = get_current_user_id()
+        requester_id = data.get("requester_id", "").strip()
+        accept = data.get("accept", False)
+
+        if not requester_id:
+            return create_error_response("Requester ID is required", 400)
+
+        if buddy_system.respond_to_buddy_request(user_id, requester_id, accept):
+            action = "accepted" if accept else "rejected"
+            return jsonify(
+                create_success_response({"message": f"Buddy request {action}"})
+            )
+        else:
+            return create_error_response("Failed to process request", 500)
+
+    except Exception as e:
+        logger.error(f"Error responding to request: {e}")
+        return create_error_response("Failed to respond", 500)
+
+
+@app.route("/buddies/my-buddies", methods=["GET"])
+@require_auth
+def get_my_buddies():
+    """Get list of confirmed study buddies"""
+    try:
+        user_id = get_current_user_id()
+        buddies = buddy_system.get_my_buddies(user_id)
+
+        return jsonify(
+            create_success_response({"buddies": buddies, "count": len(buddies)})
+        )
+
+    except Exception as e:
+        logger.error(f"Error getting buddies: {e}")
+        return create_error_response("Failed to get buddies", 500)
+
+
+@app.route("/buddies/remove", methods=["POST"])
+@require_auth
+def remove_buddy():
+    """Remove a study buddy"""
+    try:
+        if not request.is_json:
+            return create_error_response("Request must be JSON", 400)
+
+        data = request.get_json()
+        user_id = get_current_user_id()
+        buddy_id = data.get("buddy_id", "").strip()
+
+        if not buddy_id:
+            return create_error_response("Buddy ID is required", 400)
+
+        if buddy_system.remove_buddy(user_id, buddy_id):
+            return jsonify(
+                create_success_response({"message": "Buddy removed successfully"})
+            )
+        else:
+            return create_error_response("Failed to remove buddy", 500)
+
+    except Exception as e:
+        logger.error(f"Error removing buddy: {e}")
+        return create_error_response("Removal failed", 500)
+
+
 # Health check endpoint
 @app.route("/health", methods=["GET"])
 def health_check():

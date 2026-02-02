@@ -1190,6 +1190,149 @@ class DatabaseManager:
             cursor = conn.execute("SELECT file_path FROM study_materials")
             return [row[0] for row in cursor.fetchall()]
 
+    # ==================== STUDY BUDDY SYSTEM ====================
+
+    def get_study_buddy_record(
+        self, user1_id: str, user2_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """Get study buddy relationship record between two users"""
+        with self.get_connection() as conn:
+            # Check both directions
+            cursor = conn.execute(
+                """
+                SELECT * FROM study_buddies 
+                WHERE (requester_id = ? AND recipient_id = ?)
+                OR (requester_id = ? AND recipient_id = ?)
+                """,
+                (user1_id, user2_id, user2_id, user1_id),
+            )
+            row = cursor.fetchone()
+            if row:
+                return dict(row)
+            return None
+
+    def create_study_buddy_request(
+        self,
+        requester_id: str,
+        recipient_id: str,
+        message: str = "",
+        compatibility_score: float = 0,
+    ) -> bool:
+        """Create a new study buddy request"""
+        try:
+            with self.get_connection() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO study_buddies (requester_id, recipient_id, status, message, compatibility_score, created_at)
+                    VALUES (?, ?, 'pending', ?, ?, CURRENT_TIMESTAMP)
+                    """,
+                    (requester_id, recipient_id, message, compatibility_score),
+                )
+                conn.commit()
+                return True
+        except Exception as e:
+            logger.error(f"Error creating buddy request: {e}")
+            return False
+
+    def update_study_buddy_status(
+        self, requester_id: str, recipient_id: str, status: str
+    ) -> bool:
+        """Update study buddy request status (accept/reject)"""
+        try:
+            with self.get_connection() as conn:
+                conn.execute(
+                    """
+                    UPDATE study_buddies 
+                    SET status = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE requester_id = ? AND recipient_id = ? AND status = 'pending'
+                    """,
+                    (status, requester_id, recipient_id),
+                )
+                conn.commit()
+                return True
+        except Exception as e:
+            logger.error(f"Error updating buddy status: {e}")
+            return False
+
+    def get_pending_buddy_requests(self, user_id: str) -> List[Dict[str, Any]]:
+        """Get pending buddy requests for a user (where user is recipient)"""
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                """
+                SELECT sb.*, u.username, u.full_name, u.bio, u.avatar_url
+                FROM study_buddies sb
+                JOIN users u ON sb.requester_id = u.id
+                WHERE sb.recipient_id = ? AND sb.status = 'pending'
+                ORDER BY sb.created_at DESC
+                """,
+                (user_id,),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_accepted_buddies(self, user_id: str) -> List[Dict[str, Any]]:
+        """Get all accepted study buddies"""
+        with self.get_connection() as conn:
+            # Get buddies where user is requester
+            cursor = conn.execute(
+                """
+                SELECT sb.*, sb.recipient_id as buddy_id
+                FROM study_buddies sb
+                WHERE sb.requester_id = ? AND sb.status = 'accepted'
+                """,
+                (user_id,),
+            )
+            buddies1 = [dict(row) for row in cursor.fetchall()]
+
+            # Get buddies where user is recipient
+            cursor = conn.execute(
+                """
+                SELECT sb.*, sb.requester_id as buddy_id
+                FROM study_buddies sb
+                WHERE sb.recipient_id = ? AND sb.status = 'accepted'
+                """,
+                (user_id,),
+            )
+            buddies2 = [dict(row) for row in cursor.fetchall()]
+
+            return buddies1 + buddies2
+
+    def delete_study_buddy_relationship(self, user1_id: str, user2_id: str) -> bool:
+        """Delete a study buddy relationship"""
+        try:
+            with self.get_connection() as conn:
+                conn.execute(
+                    """
+                    DELETE FROM study_buddies 
+                    WHERE (requester_id = ? AND recipient_id = ?)
+                    OR (requester_id = ? AND recipient_id = ?)
+                    """,
+                    (user1_id, user2_id, user2_id, user1_id),
+                )
+                conn.commit()
+                return True
+        except Exception as e:
+            logger.error(f"Error deleting buddy relationship: {e}")
+            return False
+
+    def block_study_buddy(self, user_id: str, blocked_id: str) -> bool:
+        """Block a user"""
+        try:
+            with self.get_connection() as conn:
+                # Update existing or create new with blocked status
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO study_buddies 
+                    (requester_id, recipient_id, status, updated_at)
+                    VALUES (?, ?, 'blocked', CURRENT_TIMESTAMP)
+                    """,
+                    (user_id, blocked_id),
+                )
+                conn.commit()
+                return True
+        except Exception as e:
+            logger.error(f"Error blocking user: {e}")
+            return False
+
 
 # Global database instance
 db_manager = DatabaseManager()
