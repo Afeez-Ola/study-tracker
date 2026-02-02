@@ -393,6 +393,99 @@
             color: var(--text-muted);
             margin-bottom: 20px;
         }
+
+        /* Contribution Map (Heatmap) */
+        .heatmap-container {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .heatmap-grid {
+            display: grid;
+            grid-template-rows: repeat(7, 1fr);
+            grid-auto-flow: column;
+            gap: 3px;
+            overflow-x: auto;
+            padding: 10px 0;
+        }
+
+        .heatmap-cell {
+            width: 11px;
+            height: 11px;
+            border-radius: 2px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .heatmap-cell:hover {
+            transform: scale(1.2);
+        }
+
+        .heatmap-cell.level-0 { background: #ebedf0; }
+        .heatmap-cell.level-1 { background: #9be9a8; }
+        .heatmap-cell.level-2 { background: #40c463; }
+        .heatmap-cell.level-3 { background: #30a14e; }
+        .heatmap-cell.level-4 { background: #216e39; }
+
+        .heatmap-loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .heatmap-stats {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            margin-top: 15px;
+            font-size: 0.85rem;
+        }
+
+        .heatmap-stat {
+            text-align: center;
+        }
+
+        .heatmap-stat-value {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--accent-primary);
+        }
+
+        .heatmap-stat-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .heatmap-legend {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .heatmap-legend-box {
+            width: 11px;
+            height: 11px;
+            border-radius: 2px;
+        }
+
+        .heatmap-tooltip {
+            position: absolute;
+            background: var(--text-primary);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            pointer-events: none;
+            z-index: 1000;
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -449,6 +542,19 @@
             <div class="stat-item">
                 <div class="stat-value" id="productivity">0%</div>
                 <div class="stat-label">Productivity</div>
+            </div>
+        </div>
+
+        <!-- Contribution Map (GitHub-style Heatmap) -->
+        <div class="card">
+            <div class="section-title">Study Activity Map</div>
+            <div id="heatmapContainer">
+                <div class="heatmap-loading">Loading activity map...</div>
+            </div>
+            <div class="heatmap-stats" id="heatmapStats"></div>
+            <div class="controls-row" style="margin-top: 15px;">
+                <button class="btn btn-secondary btn-small" onclick="exportHeatmapSVG()">Export SVG</button>
+                <button class="btn btn-secondary btn-small" onclick="shareHeatmap()">Share</button>
             </div>
         </div>
 
@@ -645,6 +751,126 @@
                           `Current Streak: ${stats.streak} days 🔥`);
                 });
         }
+
+        // ==================== HEATMAP FUNCTIONS ====================
+
+        function loadHeatmap() {
+            fetch('/heatmap?days=365')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        renderHeatmap(data);
+                    } else {
+                        document.getElementById('heatmapContainer').innerHTML = 
+                            '<div class="empty-state"><p>Unable to load activity map</p></div>';
+                    }
+                })
+                .catch(err => {
+                    console.error('Heatmap error:', err);
+                    document.getElementById('heatmapContainer').innerHTML = 
+                        '<div class="empty-state"><p>Error loading activity map</p></div>';
+                });
+        }
+
+        function renderHeatmap(data) {
+            const heatmap = data.heatmap || [];
+            const stats = data.statistics || {};
+            const streaks = data.streaks || {};
+            
+            if (heatmap.length === 0) {
+                document.getElementById('heatmapContainer').innerHTML = 
+                    '<div class="empty-state"><p>No activity data yet. Start studying to build your map!</p></div>';
+                return;
+            }
+
+            // Organize by weeks
+            const weeks = [];
+            let currentWeek = [];
+            
+            heatmap.forEach((day, index) => {
+                currentWeek.push(day);
+                if (currentWeek.length === 7 || index === heatmap.length - 1) {
+                    weeks.push([...currentWeek]);
+                    currentWeek = [];
+                }
+            });
+
+            // Generate HTML
+            let html = '<div class="heatmap-container">';
+            html += '<div class="heatmap-grid">';
+            
+            weeks.forEach(week => {
+                week.forEach(day => {
+                    const date = new Date(day.date);
+                    const dateLabel = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                    const minutesLabel = day.minutes > 0 ? `${day.minutes} minutes studied` : 'No activity';
+                    
+                    html += `<div class="heatmap-cell level-${day.level}" ` +
+                            `title="${dateLabel}: ${minutesLabel}" ` +
+                            `data-date="${day.date}" ` +
+                            `data-minutes="${day.minutes}"></div>`;
+                });
+            });
+            
+            html += '</div>';
+            html += '</div>';
+            
+            // Add legend
+            html += '<div style="display: flex; justify-content: flex-end; align-items: center; gap: 5px; margin-top: 10px; font-size: 0.75rem; color: #666;">';
+            html += '<span>Less</span>';
+            html += '<div class="heatmap-legend-box" style="background: #ebedf0;"></div>';
+            html += '<div class="heatmap-legend-box" style="background: #9be9a8;"></div>';
+            html += '<div class="heatmap-legend-box" style="background: #40c463;"></div>';
+            html += '<div class="heatmap-legend-box" style="background: #30a14e;"></div>';
+            html += '<div class="heatmap-legend-box" style="background: #216e39;"></div>';
+            html += '<span>More</span>';
+            html += '</div>';
+            
+            document.getElementById('heatmapContainer').innerHTML = html;
+            
+            // Render stats
+            const statsHtml = `
+                <div class="heatmap-stat">
+                    <div class="heatmap-stat-value">${stats.active_days || 0}</div>
+                    <div class="heatmap-stat-label">Active Days</div>
+                </div>
+                <div class="heatmap-stat">
+                    <div class="heatmap-stat-value">${streaks.current_streak || 0}</div>
+                    <div class="heatmap-stat-label">Current Streak 🔥</div>
+                </div>
+                <div class="heatmap-stat">
+                    <div class="heatmap-stat-value">${stats.total_hours || 0}h</div>
+                    <div class="heatmap-stat-label">Total Time</div>
+                </div>
+                <div class="heatmap-stat">
+                    <div class="heatmap-stat-value">${stats.activity_rate || 0}%</div>
+                    <div class="heatmap-stat-label">Activity Rate</div>
+                </div>
+            `;
+            document.getElementById('heatmapStats').innerHTML = statsHtml;
+        }
+
+        function exportHeatmapSVG() {
+            window.location.href = '/heatmap/export.svg';
+        }
+
+        function shareHeatmap() {
+            fetch('/heatmap/share')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success && data.text) {
+                        // Copy to clipboard
+                        navigator.clipboard.writeText(data.text).then(() => {
+                            alert('Share text copied to clipboard!\n\n' + data.text);
+                        }).catch(() => {
+                            alert(data.text);
+                        });
+                    }
+                });
+        }
+
+        // Load heatmap on page load
+        loadHeatmap();
 
         // Load sessions on page load
         loadSessions();

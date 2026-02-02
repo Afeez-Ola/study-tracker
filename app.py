@@ -731,6 +731,115 @@ def import_csv():
         return create_error_response("Import failed", 500)
 
 
+# ==================== CONTRIBUTION MAP ROUTES ====================
+
+from contribution_map import ContributionMap, get_contribution_map
+
+
+@app.route("/heatmap", methods=["GET"])
+@optional_auth
+def get_heatmap():
+    """Get GitHub-style contribution heatmap data"""
+    try:
+        # Get parameters
+        days = request.args.get("days", 365, type=int)
+        if days < 7 or days > 730:  # Limit to reasonable range
+            days = 365
+
+        # Get user ID if authenticated
+        user_id = get_current_user_id()
+
+        # Generate heatmap
+        generator = ContributionMap()
+        data = generator.generate_heatmap_data(user_id, days)
+
+        # Add month labels
+        start_date = datetime.strptime(data["date_range"]["start"], "%Y-%m-%d")
+        end_date = datetime.strptime(data["date_range"]["end"], "%Y-%m-%d")
+        data["month_labels"] = generator.get_month_labels(start_date, end_date)
+
+        return jsonify(create_success_response(data, "Heatmap generated successfully"))
+
+    except Exception as e:
+        logger.error(f"Error generating heatmap: {e}")
+        return create_error_response("Failed to generate heatmap", 500)
+
+
+@app.route("/heatmap/stats", methods=["GET"])
+@optional_auth
+def get_heatmap_stats():
+    """Get quick heatmap statistics"""
+    try:
+        user_id = get_current_user_id()
+
+        data = get_contribution_map(user_id, days=365)
+
+        # Return just the key stats
+        stats = {
+            "statistics": data["statistics"],
+            "streaks": data["streaks"],
+            "color_levels": data["color_levels"],
+        }
+
+        return jsonify(create_success_response(stats, "Statistics retrieved"))
+
+    except Exception as e:
+        logger.error(f"Error getting heatmap stats: {e}")
+        return create_error_response("Failed to get statistics", 500)
+
+
+@app.route("/heatmap/export.svg", methods=["GET"])
+@optional_auth
+def export_heatmap_svg():
+    """Export heatmap as SVG for sharing"""
+    try:
+        user_id = get_current_user_id()
+        days = request.args.get("days", 365, type=int)
+
+        # Generate SVG
+        generator = ContributionMap()
+        svg = generator.export_svg(user_id, days)
+
+        if not svg:
+            return create_error_response("No data to export", 404)
+
+        # Return as SVG file
+        response = Response(svg, mimetype="image/svg+xml")
+        response.headers["Content-Disposition"] = (
+            "attachment; filename=study-heatmap.svg"
+        )
+        return response
+
+    except Exception as e:
+        logger.error(f"Error exporting heatmap SVG: {e}")
+        return create_error_response("Export failed", 500)
+
+
+@app.route("/heatmap/share", methods=["GET"])
+@optional_auth
+def get_share_text():
+    """Get shareable text for social media"""
+    try:
+        user_id = get_current_user_id()
+
+        generator = ContributionMap()
+        text = generator.get_share_text(user_id)
+
+        return jsonify(
+            create_success_response(
+                {
+                    "text": text,
+                    "platforms": ["twitter", "linkedin", "facebook", "copy"],
+                },
+                "Share text generated",
+            )
+        )
+
+    except Exception as e:
+        logger.error(f"Error generating share text: {e}")
+        return create_error_response("Failed to generate share text", 500)
+
+
 # Health check endpoint
 @app.route("/health", methods=["GET"])
 def health_check():
