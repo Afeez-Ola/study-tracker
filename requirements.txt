@@ -7,3 +7,4 @@ werkzeug==2.3.7
 pytest==7.4.2
 pytest-flask==1.2.0
 requests==2.31.0
+PyJWT==2.8.0

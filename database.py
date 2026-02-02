@@ -69,6 +69,103 @@ class DatabaseManager:
                 )
             """)
 
+            # Users table for authentication
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id TEXT PRIMARY KEY,
+                    email TEXT UNIQUE NOT NULL,
+                    password_hash TEXT NOT NULL,
+                    username TEXT UNIQUE,
+                    full_name TEXT,
+                    bio TEXT,
+                    avatar_url TEXT,
+                    is_verified BOOLEAN DEFAULT FALSE,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    study_streak INTEGER DEFAULT 0,
+                    total_study_minutes INTEGER DEFAULT 0,
+                    total_sessions INTEGER DEFAULT 0,
+                    location_lat REAL,
+                    location_lon REAL,
+                    location_city TEXT,
+                    location_country TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_login TIMESTAMP,
+                    last_active TIMESTAMP,
+                    preferences TEXT
+                )
+            """)
+
+            # User sessions table for tracking login sessions
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS user_sessions (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    token TEXT NOT NULL,
+                    device_info TEXT,
+                    ip_address TEXT,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TIMESTAMP NOT NULL,
+                    last_used TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+                )
+            """)
+
+            # Study materials table for file sharing
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS study_materials (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    description TEXT,
+                    file_type TEXT,
+                    file_size INTEGER,
+                    file_path TEXT,
+                    file_url TEXT,
+                    subject_tags TEXT,
+                    download_count INTEGER DEFAULT 0,
+                    rating_sum INTEGER DEFAULT 0,
+                    rating_count INTEGER DEFAULT 0,
+                    is_public BOOLEAN DEFAULT TRUE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+                )
+            """)
+
+            # Material ratings table
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS material_ratings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    material_id TEXT NOT NULL,
+                    user_id TEXT NOT NULL,
+                    rating INTEGER NOT NULL CHECK(rating >= 1 AND rating <= 5),
+                    comment TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (material_id) REFERENCES study_materials (id) ON DELETE CASCADE,
+                    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+                    UNIQUE(material_id, user_id)
+                )
+            """)
+
+            # Study buddies / collaborations table
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS study_buddies (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    requester_id TEXT NOT NULL,
+                    recipient_id TEXT NOT NULL,
+                    status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'accepted', 'rejected', 'blocked')),
+                    message TEXT,
+                    compatibility_score REAL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (requester_id) REFERENCES users (id) ON DELETE CASCADE,
+                    FOREIGN KEY (recipient_id) REFERENCES users (id) ON DELETE CASCADE,
+                    UNIQUE(requester_id, recipient_id)
+                )
+            """)
+
             # Create indexes for performance
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_sessions_date ON study_sessions(date(start_time))"
@@ -83,8 +180,32 @@ class DatabaseManager:
                 "CREATE INDEX IF NOT EXISTS idx_activity_timestamp ON activity_events(timestamp)"
             )
 
+            # Indexes for user tables
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_user_sessions_token ON user_sessions(token)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_materials_user ON study_materials(user_id)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_materials_tags ON study_materials(subject_tags)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_study_buddies_requester ON study_buddies(requester_id)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_study_buddies_recipient ON study_buddies(recipient_id)"
+            )
+
             # Initialize metadata
-            self._set_metadata(conn, "storage_version", "1.0")
+            self._set_metadata(conn, "storage_version", "1.1")
             self._set_metadata(conn, "created_at", datetime.utcnow().isoformat())
 
             conn.commit()
@@ -121,6 +242,230 @@ class DatabaseManager:
             cursor = conn.execute("SELECT value FROM db_metadata WHERE key = ?", (key,))
             row = cursor.fetchone()
             return row[0] if row else default
+
+    # ==================== USER MANAGEMENT ====================
+
+    def create_user(
+        self,
+        user_id: str,
+        email: str,
+        password_hash: str,
+        username: str = None,
+        full_name: str = None,
+    ) -> bool:
+        """Create a new user"""
+        try:
+            with self.get_connection() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO users (id, email, password_hash, username, full_name, created_at)
+                    VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                    """,
+                    (
+                        user_id,
+                        email.lower().strip(),
+                        password_hash,
+                        username,
+                        full_name,
+                    ),
+                )
+                conn.commit()
+                logger.info(f"Created user: {email}")
+                return True
+        except sqlite3.IntegrityError as e:
+            logger.error(f"User creation failed - duplicate: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"User creation failed: {e}")
+            return False
+
+    def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
+        """Get user by email"""
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                "SELECT * FROM users WHERE email = ? AND is_active = TRUE",
+                (email.lower().strip(),),
+            )
+            row = cursor.fetchone()
+            if row:
+                return dict(row)
+            return None
+
+    def get_user_by_id(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """Get user by ID"""
+        with self.get_connection() as conn:
+            cursor = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+            row = cursor.fetchone()
+            if row:
+                return dict(row)
+            return None
+
+    def update_user_login(self, user_id: str) -> bool:
+        """Update user's last login time"""
+        try:
+            with self.get_connection() as conn:
+                conn.execute(
+                    """
+                    UPDATE users 
+                    SET last_login = CURRENT_TIMESTAMP, last_active = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                    """,
+                    (user_id,),
+                )
+                conn.commit()
+                return True
+        except Exception as e:
+            logger.error(f"Failed to update user login: {e}")
+            return False
+
+    def update_user_profile(self, user_id: str, updates: Dict[str, Any]) -> bool:
+        """Update user profile"""
+        allowed_fields = [
+            "username",
+            "full_name",
+            "bio",
+            "avatar_url",
+            "location_lat",
+            "location_lon",
+            "location_city",
+            "location_country",
+            "preferences",
+        ]
+
+        try:
+            with self.get_connection() as conn:
+                for field, value in updates.items():
+                    if field in allowed_fields:
+                        conn.execute(
+                            f"UPDATE users SET {field} = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                            (value, user_id),
+                        )
+                conn.commit()
+                return True
+        except Exception as e:
+            logger.error(f"Failed to update user profile: {e}")
+            return False
+
+    def update_user_stats(self, user_id: str, study_minutes: int = 0) -> bool:
+        """Update user study statistics"""
+        try:
+            with self.get_connection() as conn:
+                conn.execute(
+                    """
+                    UPDATE users 
+                    SET total_study_minutes = total_study_minutes + ?,
+                        total_sessions = total_sessions + 1,
+                        last_active = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                    """,
+                    (study_minutes, user_id),
+                )
+                conn.commit()
+                return True
+        except Exception as e:
+            logger.error(f"Failed to update user stats: {e}")
+            return False
+
+    def save_user_session(
+        self,
+        session_id: str,
+        user_id: str,
+        token: str,
+        device_info: str = None,
+        ip_address: str = None,
+        expires_at: str = None,
+    ) -> bool:
+        """Save user login session"""
+        try:
+            with self.get_connection() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO user_sessions (id, user_id, token, device_info, ip_address, expires_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (session_id, user_id, token, device_info, ip_address, expires_at),
+                )
+                conn.commit()
+                return True
+        except Exception as e:
+            logger.error(f"Failed to save user session: {e}")
+            return False
+
+    def get_user_by_token(self, token: str) -> Optional[Dict[str, Any]]:
+        """Get user by session token"""
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                """
+                SELECT u.* FROM users u
+                JOIN user_sessions s ON u.id = s.user_id
+                WHERE s.token = ? AND s.is_active = TRUE
+                AND s.expires_at > CURRENT_TIMESTAMP
+                """,
+                (token,),
+            )
+            row = cursor.fetchone()
+            if row:
+                # Update last used
+                conn.execute(
+                    "UPDATE user_sessions SET last_used = CURRENT_TIMESTAMP WHERE token = ?",
+                    (token,),
+                )
+                conn.commit()
+                return dict(row)
+            return None
+
+    def invalidate_user_session(self, token: str) -> bool:
+        """Invalidate a user session (logout)"""
+        try:
+            with self.get_connection() as conn:
+                conn.execute(
+                    "UPDATE user_sessions SET is_active = FALSE WHERE token = ?",
+                    (token,),
+                )
+                conn.commit()
+                return True
+        except Exception as e:
+            logger.error(f"Failed to invalidate session: {e}")
+            return False
+
+    def find_users_nearby(
+        self,
+        lat: float,
+        lon: float,
+        radius_km: float = 10,
+        exclude_user_id: str = None,
+        limit: int = 20,
+    ) -> List[Dict[str, Any]]:
+        """Find users within radius using Haversine formula"""
+        try:
+            with self.get_connection() as conn:
+                # Haversine formula approximation
+                query = """
+                SELECT id, username, full_name, bio, avatar_url, 
+                       location_city, location_country,
+                       study_streak, total_study_minutes,
+                       (6371 * acos(cos(radians(?)) * cos(radians(location_lat)) * 
+                        cos(radians(location_lon) - radians(?)) + 
+                        sin(radians(?)) * sin(radians(location_lat)))) AS distance
+                FROM users
+                WHERE location_lat IS NOT NULL 
+                AND location_lon IS NOT NULL
+                AND is_active = TRUE
+                """
+                params = [lat, lon, lat]
+
+                if exclude_user_id:
+                    query += " AND id != ?"
+                    params.append(exclude_user_id)
+
+                query += " HAVING distance <= ? ORDER BY distance LIMIT ?"
+                params.extend([radius_km, limit])
+
+                cursor = conn.execute(query, params)
+                return [dict(row) for row in cursor.fetchall()]
+        except Exception as e:
+            logger.error(f"Failed to find nearby users: {e}")
+            return []
 
     def create_session(
         self, topic: str, description: str = "", metadata: Dict[str, Any] = None

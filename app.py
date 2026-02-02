@@ -19,6 +19,21 @@ from session_manager import SessionManager
 from activity_monitor import ActivityMonitor
 from config import config
 
+# Import authentication
+from auth import (
+    hash_password,
+    verify_password,
+    generate_jwt_token,
+    decode_jwt_token,
+    require_auth,
+    optional_auth,
+    get_current_user,
+    get_current_user_id,
+    validate_email,
+    validate_password,
+    sanitize_username,
+)
+
 # Configure logging
 logging.basicConfig(
     level=getattr(logging, config.log_level),
@@ -148,6 +163,260 @@ def index():
     except Exception as e:
         logger.error(f"Error serving index page: {e}")
         return "Error loading page", 500
+
+
+# ==================== AUTHENTICATION ROUTES ====================
+
+
+@app.route("/auth/register", methods=["POST"])
+def register():
+    """Register a new user"""
+    try:
+        if not request.is_json:
+            return create_error_response("Request must be JSON", 400)
+
+        data = request.get_json()
+        email = data.get("email", "").strip().lower()
+        password = data.get("password", "")
+        username = data.get("username", "").strip()
+        full_name = data.get("full_name", "").strip()
+
+        # Validation
+        if not email or not password:
+            return create_error_response("Email and password are required", 400)
+
+        if not validate_email(email):
+            return create_error_response("Invalid email format", 400)
+
+        is_valid_password, password_msg = validate_password(password)
+        if not is_valid_password:
+            return create_error_response(password_msg, 400)
+
+        # Check if user exists
+        existing_user = db_manager.get_user_by_email(email)
+        if existing_user:
+            return create_error_response("Email already registered", 409)
+
+        # Check username uniqueness if provided
+        if username:
+            username = sanitize_username(username)
+            if len(username) < 3:
+                return create_error_response(
+                    "Username must be at least 3 characters", 400
+                )
+
+        # Create user
+        import uuid
+
+        user_id = str(uuid.uuid4())
+        password_hash = hash_password(password)
+
+        if db_manager.create_user(user_id, email, password_hash, username, full_name):
+            # Generate token
+            token = generate_jwt_token(user_id)
+
+            logger.info(f"User registered: {email}")
+            return jsonify(
+                create_success_response(
+                    {
+                        "token": token,
+                        "user": {
+                            "id": user_id,
+                            "email": email,
+                            "username": username,
+                            "full_name": full_name,
+                        },
+                        "message": "Registration successful",
+                    }
+                )
+            )
+        else:
+            return create_error_response("Registration failed", 500)
+
+    except Exception as e:
+        logger.error(f"Registration error: {e}")
+        return create_error_response("Internal server error", 500)
+
+
+@app.route("/auth/login", methods=["POST"])
+def login():
+    """Login user and return JWT token"""
+    try:
+        if not request.is_json:
+            return create_error_response("Request must be JSON", 400)
+
+        data = request.get_json()
+        email = data.get("email", "").strip().lower()
+        password = data.get("password", "")
+
+        if not email or not password:
+            return create_error_response("Email and password are required", 400)
+
+        # Get user
+        user = db_manager.get_user_by_email(email)
+        if not user:
+            return create_error_response("Invalid email or password", 401)
+
+        # Verify password
+        if not verify_password(password, user["password_hash"]):
+            return create_error_response("Invalid email or password", 401)
+
+        # Check if account is active
+        if not user.get("is_active", True):
+            return create_error_response("Account has been disabled", 403)
+
+        # Update last login
+        db_manager.update_user_login(user["id"])
+
+        # Generate token
+        token = generate_jwt_token(user["id"])
+
+        logger.info(f"User logged in: {email}")
+        return jsonify(
+            create_success_response(
+                {
+                    "token": token,
+                    "user": {
+                        "id": user["id"],
+                        "email": user["email"],
+                        "username": user.get("username"),
+                        "full_name": user.get("full_name"),
+                        "study_streak": user.get("study_streak", 0),
+                        "total_study_minutes": user.get("total_study_minutes", 0),
+                    },
+                    "message": "Login successful",
+                }
+            )
+        )
+
+    except Exception as e:
+        logger.error(f"Login error: {e}")
+        return create_error_response("Internal server error", 500)
+
+
+@app.route("/auth/logout", methods=["POST"])
+@require_auth
+def logout():
+    """Logout user (invalidate token)"""
+    try:
+        # In a more complex system, you might want to blacklist the token
+        # For now, we just return success and the client discards the token
+        logger.info(f"User logged out: {get_current_user_id()}")
+        return jsonify(create_success_response({"message": "Logout successful"}))
+    except Exception as e:
+        logger.error(f"Logout error: {e}")
+        return create_error_response("Internal server error", 500)
+
+
+@app.route("/auth/me", methods=["GET"])
+@require_auth
+def get_current_user_profile():
+    """Get current user profile"""
+    try:
+        user = get_current_user()
+        if not user:
+            return create_error_response("User not found", 404)
+
+        # Remove sensitive data
+        safe_user = {
+            "id": user["id"],
+            "email": user["email"],
+            "username": user.get("username"),
+            "full_name": user.get("full_name"),
+            "bio": user.get("bio"),
+            "avatar_url": user.get("avatar_url"),
+            "study_streak": user.get("study_streak", 0),
+            "total_study_minutes": user.get("total_study_minutes", 0),
+            "total_sessions": user.get("total_sessions", 0),
+            "location_city": user.get("location_city"),
+            "location_country": user.get("location_country"),
+            "created_at": user.get("created_at"),
+            "is_verified": user.get("is_verified", False),
+        }
+
+        return jsonify(create_success_response({"user": safe_user}))
+
+    except Exception as e:
+        logger.error(f"Profile error: {e}")
+        return create_error_response("Internal server error", 500)
+
+
+@app.route("/auth/profile", methods=["PUT"])
+@require_auth
+def update_profile():
+    """Update user profile"""
+    try:
+        if not request.is_json:
+            return create_error_response("Request must be JSON", 400)
+
+        data = request.get_json()
+        user_id = get_current_user_id()
+
+        # Allowed fields to update
+        allowed_updates = {}
+        if "full_name" in data:
+            allowed_updates["full_name"] = data["full_name"].strip()
+        if "bio" in data:
+            allowed_updates["bio"] = data["bio"].strip()[:500]  # Limit bio length
+        if "username" in data:
+            new_username = sanitize_username(data["username"])
+            if len(new_username) >= 3:
+                allowed_updates["username"] = new_username
+        if "location_city" in data:
+            allowed_updates["location_city"] = data["location_city"].strip()
+        if "location_country" in data:
+            allowed_updates["location_country"] = data["location_country"].strip()
+
+        if db_manager.update_user_profile(user_id, allowed_updates):
+            return jsonify(
+                create_success_response({"message": "Profile updated successfully"})
+            )
+        else:
+            return create_error_response("Failed to update profile", 500)
+
+    except Exception as e:
+        logger.error(f"Update profile error: {e}")
+        return create_error_response("Internal server error", 500)
+
+
+@app.route("/auth/change-password", methods=["POST"])
+@require_auth
+def change_password():
+    """Change user password"""
+    try:
+        if not request.is_json:
+            return create_error_response("Request must be JSON", 400)
+
+        data = request.get_json()
+        current_password = data.get("current_password", "")
+        new_password = data.get("new_password", "")
+
+        if not current_password or not new_password:
+            return create_error_response("Current and new password are required", 400)
+
+        # Validate new password
+        is_valid, msg = validate_password(new_password)
+        if not is_valid:
+            return create_error_response(msg, 400)
+
+        user = get_current_user()
+
+        # Verify current password
+        if not verify_password(current_password, user["password_hash"]):
+            return create_error_response("Current password is incorrect", 401)
+
+        # Update password
+        new_hash = hash_password(new_password)
+        if db_manager.update_user_profile(user["id"], {"password_hash": new_hash}):
+            return jsonify(
+                create_success_response({"message": "Password changed successfully"})
+            )
+        else:
+            return create_error_response("Failed to change password", 500)
+
+    except Exception as e:
+        logger.error(f"Change password error: {e}")
+        return create_error_response("Internal server error", 500)
 
 
 # API Routes
