@@ -83,6 +83,9 @@ class ActivityMonitor:
         self.total_active_time = 0
         self.total_idle_time = 0
 
+        # Fallback mode (when pynput fails)
+        self.fallback_mode = False
+
         # Threading
         self.shutdown_event = threading.Event()
         self.monitor_thread = None
@@ -167,11 +170,17 @@ class ActivityMonitor:
                 # Reset shutdown event
                 self.shutdown_event.clear()
 
-                # Start input listeners
-                if not self._start_input_listeners():
-                    return False
+                # Start input listeners (with fallback if they fail)
+                listeners_started = self._start_input_listeners()
+                if not listeners_started:
+                    logger.warning(
+                        "Input listeners failed to start - falling back to timer-only mode"
+                    )
+                    self.fallback_mode = True
+                else:
+                    self.fallback_mode = False
 
-                # Start background threads
+                # Start background threads (always works even without listeners)
                 self.monitor_thread = threading.Thread(
                     target=self._idle_detection_loop,
                     daemon=True,
@@ -186,7 +195,12 @@ class ActivityMonitor:
                 )
                 self.intensity_thread.start()
 
-                logger.info(f"Started activity monitoring for session {session_id}")
+                if self.fallback_mode:
+                    logger.info(
+                        f"Started timer-based monitoring for session {session_id} (no system activity tracking)"
+                    )
+                else:
+                    logger.info(f"Started activity monitoring for session {session_id}")
 
                 # Log start event
                 self._log_activity_event(
@@ -290,82 +304,72 @@ class ActivityMonitor:
             return stats
 
     def _start_input_listeners(self) -> bool:
-        """Start keyboard and mouse listeners"""
+        """Start keyboard and mouse listeners with robust error handling"""
         if not PYNPUT_AVAILABLE:
             logger.warning("pynput not available - monitoring disabled")
             return False
 
         try:
-
+            # Wrap callbacks in try-except to handle macOS threading issues
             def on_key_press(key):
-                if not self.is_monitoring or self.is_paused:
-                    return
-                self._on_keyboard_activity(key)
+                try:
+                    if not self.is_monitoring or self.is_paused:
+                        return
+                    self._on_keyboard_activity(key)
+                except Exception as e:
+                    logger.debug(f"Keyboard callback error: {e}")
 
             def on_mouse_move(x, y):
-                if not self.is_monitoring or self.is_paused:
-                    return
-                self._on_mouse_activity(x, y, 0, 0)
+                try:
+                    if not self.is_monitoring or self.is_paused:
+                        return
+                    self._on_mouse_activity(x, y, 0, 0)
+                except Exception as e:
+                    logger.debug(f"Mouse move callback error: {e}")
 
             def on_mouse_click(x, y, button, pressed):
-                if not self.is_monitoring or self.is_paused:
-                    return
-                self._on_mouse_activity(x, y, 1, 1)
+                try:
+                    if not self.is_monitoring or self.is_paused:
+                        return
+                    self._on_mouse_activity(x, y, 1, 1)
+                except Exception as e:
+                    logger.debug(f"Mouse click callback error: {e}")
 
-            # Start listeners with error handling
+            # Start keyboard listener with macOS compatibility workaround
             try:
-                self.keyboard_listener = keyboard.Listener(on_press=on_key_press)
+                # Use suppress=False to avoid permission issues on macOS
+                self.keyboard_listener = keyboard.Listener(
+                    on_press=on_key_press, suppress=False, daemon=True
+                )
                 self.keyboard_listener.start()
                 logger.info("Keyboard listener started")
             except Exception as e:
                 logger.error(f"Failed to start keyboard listener: {e}")
-                return False
+                logger.warning("Continuing without keyboard monitoring")
+                # Don't return False - allow fallback to mouse-only monitoring
 
+            # Start mouse listener
             try:
                 self.mouse_listener = mouse.Listener(
-                    on_move=on_mouse_move, on_click=on_mouse_click
+                    on_move=on_mouse_move,
+                    on_click=on_mouse_click,
+                    suppress=False,
+                    daemon=True,
                 )
                 self.mouse_listener.start()
                 logger.info("Mouse listener started")
             except Exception as e:
                 logger.error(f"Failed to start mouse listener: {e}")
-                # Continue even if mouse fails
-                pass
+                logger.warning("Continuing without mouse monitoring")
 
-            logger.info("Started input listeners")
-            return True
+            # Check if at least one listener started successfully
+            if not hasattr(self, "keyboard_listener") and not hasattr(
+                self, "mouse_listener"
+            ):
+                logger.error("No input listeners could be started")
+                return False
 
-        except Exception as e:
-            logger.error(f"Failed to start input listeners: {e}")
-            return False
-
-        try:
-
-            def on_key_press(key):
-                if not self.is_monitoring or self.is_paused:
-                    return
-                self._on_keyboard_activity(key)
-
-            def on_mouse_move(x, y):
-                if not self.is_monitoring or self.is_paused:
-                    return
-                self._on_mouse_activity(x, y, 0, 0)
-
-            def on_mouse_click(x, y, button, pressed):
-                if not self.is_monitoring or self.is_paused:
-                    return
-                self._on_mouse_activity(x, y, 1, 1)
-
-            # Start listeners
-            self.keyboard_listener = keyboard.Listener(on_press=on_key_press)
-            self.mouse_listener = mouse.Listener(
-                on_move=on_mouse_move, on_click=on_mouse_click
-            )
-
-            self.keyboard_listener.start()
-            self.mouse_listener.start()
-
-            logger.info("Started input listeners")
+            logger.info("Started input listeners (with fallbacks if needed)")
             return True
 
         except Exception as e:
@@ -384,44 +388,50 @@ class ActivityMonitor:
             logger.error(f"Error stopping input listeners: {e}")
 
     def _on_keyboard_activity(self, key):
-        """Handle keyboard activity"""
-        current_time = time.time()
-        self.last_activity_time = current_time
+        """Handle keyboard activity with error handling"""
+        try:
+            current_time = time.time()
+            self.last_activity_time = current_time
 
-        # Record keypress for intensity calculation
-        self.keypress_times.append(current_time)
+            # Record keypress for intensity calculation
+            self.keypress_times.append(current_time)
 
-        # Create activity event
-        event = ActivityEvent(
-            timestamp=current_time,
-            activity_type=ActivityType.KEYBOARD,
-            intensity=self._calculate_keyboard_intensity(),
-            details={"key": self._sanitize_key(str(key))},
-        )
+            # Create activity event
+            event = ActivityEvent(
+                timestamp=current_time,
+                activity_type=ActivityType.KEYBOARD,
+                intensity=self._calculate_keyboard_intensity(),
+                details={"key": self._sanitize_key(str(key))},
+            )
 
-        self._record_activity_event(event)
+            self._record_activity_event(event)
+        except Exception as e:
+            logger.debug(f"Keyboard activity error: {e}")
 
     def _on_mouse_activity(self, x, y, dx, dy):
-        """Handle mouse activity"""
-        current_time = time.time()
-        self.last_activity_time = current_time
+        """Handle mouse activity with error handling"""
+        try:
+            current_time = time.time()
+            self.last_activity_time = current_time
 
-        # Track mouse position for movement patterns
-        self.mouse_positions.append((x, y, current_time))
+            # Track mouse position for movement patterns
+            self.mouse_positions.append((x, y, current_time))
 
-        # Calculate movement intensity
-        distance = (dx**2 + dy**2) ** 0.5
-        intensity = min(distance / 100.0, 1.0)  # Normalize to 0-1
+            # Calculate movement intensity
+            distance = (dx**2 + dy**2) ** 0.5
+            intensity = min(distance / 100.0, 1.0)  # Normalize to 0-1
 
-        # Create activity event
-        event = ActivityEvent(
-            timestamp=current_time,
-            activity_type=ActivityType.MOUSE,
-            intensity=intensity,
-            details={"position": (x, y), "movement": (dx, dy)},
-        )
+            # Create activity event
+            event = ActivityEvent(
+                timestamp=current_time,
+                activity_type=ActivityType.MOUSE,
+                intensity=intensity,
+                details={"position": (x, y), "movement": (dx, dy)},
+            )
 
-        self._record_activity_event(event)
+            self._record_activity_event(event)
+        except Exception as e:
+            logger.debug(f"Mouse activity error: {e}")
 
     def _record_activity_event(self, event: ActivityEvent):
         """Record an activity event"""
