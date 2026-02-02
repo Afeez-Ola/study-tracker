@@ -549,9 +549,10 @@
             fetch('/get_status')
                 .then(r => r.json())
                 .then(data => {
-                    const hours = Math.floor(data.total_seconds / 3600);
-                    const minutes = Math.floor((data.total_seconds % 3600) / 60);
-                    const seconds = data.total_seconds % 60;
+                    const totalSeconds = Math.max(0, data.total_seconds || 0);
+                    const hours = Math.floor(totalSeconds / 3600);
+                    const minutes = Math.floor((totalSeconds % 3600) / 60);
+                    const seconds = totalSeconds % 60;
                     
                     document.getElementById('timerDisplay').textContent = 
                         `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;

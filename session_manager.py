@@ -58,16 +58,20 @@ class SessionManager:
                 )
 
                 # Initialize session state
+                # Use time.time() for consistent timezone-agnostic timing
+                start_timestamp = time.time()
+
                 self.current_session = {
                     "id": session_id,
                     "topic": topic,
                     "description": description,
                     "metadata": metadata or {},
-                    "created_at": datetime.utcnow().isoformat(),
+                    "created_at": datetime.utcnow().isoformat(),  # For display only
+                    "start_timestamp": start_timestamp,  # For accurate timing
                 }
 
                 # Update timing
-                self.session_start_time = time.time()
+                self.session_start_time = start_timestamp
                 self.last_activity_time = time.time()
                 self.total_active_time = 0
                 self.total_idle_time = 0
@@ -258,7 +262,9 @@ class SessionManager:
                     "id": self.current_session["id"],
                     "topic": self.current_session["topic"],
                     "description": self.current_session.get("description", ""),
-                    "start_time": self.current_session["created_at"],
+                    "start_time": self.current_session.get(
+                        "start_timestamp", self.session_start_time
+                    ),
                     "metadata": self.current_session.get("metadata", {}),
                 },
             }

@@ -301,6 +301,12 @@ class ActivityMonitor:
                 }
 
             stats = self._calculate_current_stats()
+
+            # Safety check: ensure no negative values
+            stats["total_seconds"] = max(0, stats.get("total_seconds", 0))
+            stats["active_seconds"] = max(0, stats.get("active_seconds", 0))
+            stats["idle_seconds"] = max(0, stats.get("idle_seconds", 0))
+
             return stats
 
     def _start_input_listeners(self) -> bool:
@@ -612,50 +618,29 @@ class ActivityMonitor:
         return max(intensity, 0.1)
 
     def _calculate_current_stats(self) -> Dict[str, Any]:
-        """Calculate current activity statistics"""
-        current_time = time.time()
-
-        # Use session manager start time as fallback
+        """Calculate current activity statistics - uses session manager timing"""
+        # Get timing from session manager (which has the correct session start time)
         session_status = self.session_manager.get_current_status()
-        if session_status.get("active") and session_status.get("current_session"):
-            session_start_time = session_status["current_session"].get("start_time", "")
-            if session_start_time:
-                try:
-                    import datetime
 
-                    dt = datetime.datetime.fromisoformat(
-                        session_start_time.replace("Z", "+00:00")
-                    )
-                    session_start_time = dt.timestamp()
-                except:
-                    session_start_time = current_time
-            else:
-                session_start_time = current_time
-        else:
-            session_start_time = current_time
+        if not session_status.get("active"):
+            return {
+                "total_seconds": 0,
+                "active_seconds": 0,
+                "idle_seconds": 0,
+                "productivity": 0,
+                "currently_active": False,
+                "intensity": 0.0,
+            }
 
-        total_time = current_time - session_start_time
+        # Use session manager's calculated time (already handles timezone correctly)
+        total_time = session_status.get("total_seconds", 0)
+        active_time = session_status.get("active_seconds", 0)
+        idle_time = session_status.get("idle_seconds", 0)
 
-        # Calculate active vs idle time
-        if self.is_paused:
-            active_time = self.total_active_time
-            idle_time = total_time
-        else:
-            time_since_activity = current_time - self.last_activity_time
-
-            if time_since_activity >= self.idle_threshold:
-                # Currently idle
-                if self.idle_start_time is None:
-                    idle_time = self.total_idle_time + time_since_activity
-                else:
-                    idle_time = self.total_idle_time + (
-                        time.time() - self.idle_start_time
-                    )
-                active_time = total_time - idle_time
-            else:
-                # Currently active
-                active_time = self.total_active_time + min(time_since_activity, 1.0)
-                idle_time = self.total_idle_time
+        # Ensure we don't have negative values
+        total_time = max(0, total_time)
+        active_time = max(0, active_time)
+        idle_time = max(0, idle_time)
 
         # Calculate productivity
         productivity = (active_time / total_time * 100) if total_time > 0 else 0
