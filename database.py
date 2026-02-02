@@ -961,6 +961,235 @@ class DatabaseManager:
             logger.info(f"Cleaned up {deleted_count} old activity events")
             return deleted_count
 
+    # ==================== STUDY MATERIALS ====================
+
+    def save_material(
+        self,
+        material_id: str,
+        user_id: str,
+        title: str,
+        description: str,
+        file_type: str,
+        file_size: int,
+        file_path: str,
+        subject_tags: str,
+        is_public: bool = True,
+    ) -> bool:
+        """Save study material metadata to database"""
+        try:
+            with self.get_connection() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO study_materials 
+                    (id, user_id, title, description, file_type, file_size, file_path, subject_tags, is_public, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                    """,
+                    (
+                        material_id,
+                        user_id,
+                        title,
+                        description,
+                        file_type,
+                        file_size,
+                        file_path,
+                        subject_tags,
+                        is_public,
+                    ),
+                )
+                conn.commit()
+                return True
+        except Exception as e:
+            logger.error(f"Error saving material: {e}")
+            return False
+
+    def get_material_by_id(self, material_id: str) -> Optional[Dict[str, Any]]:
+        """Get material by ID"""
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                "SELECT * FROM study_materials WHERE id = ?", (material_id,)
+            )
+            row = cursor.fetchone()
+            if row:
+                return dict(row)
+            return None
+
+    def search_materials(
+        self,
+        query: str = None,
+        subject: str = None,
+        tags: List[str] = None,
+        user_id: str = None,
+        only_public: bool = True,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> List[Dict[str, Any]]:
+        """Search study materials with filters"""
+        with self.get_connection() as conn:
+            sql = """
+                SELECT m.*, u.username, u.full_name as uploader_name
+                FROM study_materials m
+                JOIN users u ON m.user_id = u.id
+                WHERE 1=1
+            """
+            params = []
+
+            if only_public and not user_id:
+                sql += " AND m.is_public = TRUE"
+
+            if user_id:
+                sql += " AND m.user_id = ?"
+                params.append(user_id)
+
+            if query:
+                sql += " AND (m.title LIKE ? OR m.description LIKE ?)"
+                search_term = f"%{query}%"
+                params.extend([search_term, search_term])
+
+            if subject:
+                sql += " AND m.subject_tags LIKE ?"
+                params.append(f"%{subject}%")
+
+            if tags:
+                for tag in tags:
+                    sql += " AND m.subject_tags LIKE ?"
+                    params.append(f"%{tag}%")
+
+            sql += " ORDER BY m.created_at DESC LIMIT ? OFFSET ?"
+            params.extend([limit, offset])
+
+            cursor = conn.execute(sql, params)
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_materials_by_user(
+        self, user_id: str, limit: int = 50, offset: int = 0
+    ) -> List[Dict[str, Any]]:
+        """Get all materials by a user"""
+        return self.search_materials(
+            user_id=user_id, only_public=False, limit=limit, offset=offset
+        )
+
+    def delete_material(self, material_id: str) -> bool:
+        """Delete a material"""
+        try:
+            with self.get_connection() as conn:
+                conn.execute("DELETE FROM study_materials WHERE id = ?", (material_id,))
+                conn.commit()
+                return True
+        except Exception as e:
+            logger.error(f"Error deleting material: {e}")
+            return False
+
+    def increment_download_count(self, material_id: str) -> bool:
+        """Increment download counter"""
+        try:
+            with self.get_connection() as conn:
+                conn.execute(
+                    "UPDATE study_materials SET download_count = download_count + 1 WHERE id = ?",
+                    (material_id,),
+                )
+                conn.commit()
+                return True
+        except Exception as e:
+            logger.error(f"Error incrementing download count: {e}")
+            return False
+
+    def create_rating(
+        self, material_id: str, user_id: str, rating: int, comment: str
+    ) -> bool:
+        """Create a new rating"""
+        try:
+            with self.get_connection() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO material_ratings (material_id, user_id, rating, comment, created_at)
+                    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                    """,
+                    (material_id, user_id, rating, comment),
+                )
+                # Update material rating aggregate
+                conn.execute(
+                    """
+                    UPDATE study_materials 
+                    SET rating_sum = rating_sum + ?, rating_count = rating_count + 1
+                    WHERE id = ?
+                    """,
+                    (rating, material_id),
+                )
+                conn.commit()
+                return True
+        except Exception as e:
+            logger.error(f"Error creating rating: {e}")
+            return False
+
+    def update_rating(self, rating_id: int, rating: int, comment: str) -> bool:
+        """Update an existing rating"""
+        try:
+            with self.get_connection() as conn:
+                conn.execute(
+                    "UPDATE material_ratings SET rating = ?, comment = ? WHERE id = ?",
+                    (rating, comment, rating_id),
+                )
+                conn.commit()
+                return True
+        except Exception as e:
+            logger.error(f"Error updating rating: {e}")
+            return False
+
+    def get_user_rating(
+        self, material_id: str, user_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """Get a user's rating for a material"""
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                "SELECT * FROM material_ratings WHERE material_id = ? AND user_id = ?",
+                (material_id, user_id),
+            )
+            row = cursor.fetchone()
+            if row:
+                return dict(row)
+            return None
+
+    def get_material_ratings(
+        self, material_id: str, limit: int = 20
+    ) -> List[Dict[str, Any]]:
+        """Get ratings for a material"""
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                """
+                SELECT r.*, u.username, u.full_name
+                FROM material_ratings r
+                JOIN users u ON r.user_id = u.id
+                WHERE r.material_id = ?
+                ORDER BY r.created_at DESC
+                LIMIT ?
+                """,
+                (material_id, limit),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_popular_tags(self, limit: int = 20) -> List[Dict[str, Any]]:
+        """Get most popular subject tags"""
+        with self.get_connection() as conn:
+            # This is a simplified version - in production, you'd want a proper tags table
+            cursor = conn.execute(
+                """
+                SELECT subject_tags, COUNT(*) as count
+                FROM study_materials
+                WHERE is_public = TRUE AND subject_tags != ''
+                GROUP BY subject_tags
+                ORDER BY count DESC
+                LIMIT ?
+                """,
+                (limit,),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_all_material_file_paths(self) -> List[str]:
+        """Get all file paths from database (for cleanup)"""
+        with self.get_connection() as conn:
+            cursor = conn.execute("SELECT file_path FROM study_materials")
+            return [row[0] for row in cursor.fetchall()]
+
 
 # Global database instance
 db_manager = DatabaseManager()

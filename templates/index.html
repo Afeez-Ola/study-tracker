@@ -486,6 +486,70 @@
             z-index: 1000;
             display: none;
         }
+
+        /* Study Materials */
+        .materials-section {
+            margin-top: 10px;
+        }
+
+        .materials-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            align-items: center;
+        }
+
+        .materials-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .material-item {
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            padding: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: transform 0.2s;
+        }
+
+        .material-item:hover {
+            transform: translateX(4px);
+            background: var(--border-color);
+        }
+
+        .material-info h4 {
+            font-size: 1rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .material-info p {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .material-meta {
+            text-align: right;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .material-file-type {
+            display: inline-block;
+            padding: 2px 8px;
+            background: var(--accent-primary);
+            color: white;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            margin-right: 8px;
+        }
     </style>
 </head>
 <body>
@@ -564,6 +628,21 @@
             <button class="btn btn-secondary btn-small" onclick="document.getElementById('importFile').click()">Import CSV</button>
             <button class="btn btn-secondary btn-small" onclick="showStats()">View Stats</button>
             <input type="file" id="importFile" accept=".csv" onchange="importCSV(event)">
+        </div>
+
+        <!-- Study Materials -->
+        <div class="card">
+            <div class="section-title">Study Materials</div>
+            <div class="materials-section">
+                <div class="materials-controls">
+                    <input type="text" id="materialSearch" class="input-field" placeholder="Search materials..." style="flex: 1;">
+                    <button class="btn btn-secondary btn-small" onclick="searchMaterials()">Search</button>
+                    <button class="btn btn-primary btn-small" onclick="showUploadForm()">Upload</button>
+                </div>
+                <div id="materialsList" class="materials-list">
+                    <div class="empty-state"><p>Loading materials...</p></div>
+                </div>
+            </div>
         </div>
 
         <!-- Recent Sessions -->
@@ -869,11 +948,121 @@
                 });
         }
 
+        // ==================== MATERIALS FUNCTIONS ====================
+
+        function loadMaterials() {
+            fetch('/materials?limit=20')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        renderMaterials(data.materials || []);
+                    }
+                })
+                .catch(err => {
+                    console.error('Materials error:', err);
+                });
+        }
+
+        function renderMaterials(materials) {
+            const container = document.getElementById('materialsList');
+            
+            if (materials.length === 0) {
+                container.innerHTML = '<div class="empty-state"><p>No materials yet. Be the first to share!</p></div>';
+                return;
+            }
+
+            container.innerHTML = materials.map(m => {
+                const fileType = m.file_type?.toUpperCase() || 'FILE';
+                return `
+                    <div class="material-item" onclick="downloadMaterial('${m.id}')">
+                        <div class="material-info">
+                            <h4><span class="material-file-type">${fileType}</span>${m.title}</h4>
+                            <p>${m.description || 'No description'} • by ${m.uploader_name || 'Anonymous'}</p>
+                        </div>
+                        <div class="material-meta">
+                            <div>${m.file_size_formatted}</div>
+                            <div>⬇️ ${m.download_count || 0} downloads</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function searchMaterials() {
+            const query = document.getElementById('materialSearch').value.trim();
+            if (!query) {
+                loadMaterials();
+                return;
+            }
+
+            fetch(`/materials?q=${encodeURIComponent(query)}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        renderMaterials(data.materials || []);
+                    }
+                });
+        }
+
+        function downloadMaterial(materialId) {
+            window.open(`/materials/${materialId}/download`, '_blank');
+        }
+
+        function showUploadForm() {
+            // Simple prompt-based upload for now
+            const title = prompt('Enter material title:');
+            if (!title) return;
+
+            const description = prompt('Enter description (optional):') || '';
+            const tags = prompt('Enter subject tags (comma-separated):') || '';
+
+            // Create a hidden file input
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.pdf,.doc,.docx,.txt,.md,.ppt,.pptx,.xls,.xlsx';
+            input.onchange = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    uploadFile(file, title, description, tags);
+                }
+            };
+            input.click();
+        }
+
+        function uploadFile(file, title, description, tags) {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('title', title);
+            formData.append('description', description);
+            formData.append('tags', tags);
+            formData.append('is_public', 'true');
+
+            fetch('/materials/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Material uploaded successfully!');
+                    loadMaterials();
+                } else {
+                    alert('Error: ' + (data.error || 'Upload failed'));
+                }
+            })
+            .catch(err => {
+                alert('Upload failed: ' + err.message);
+            });
+        }
+
         // Load heatmap on page load
         loadHeatmap();
 
         // Load sessions on page load
         loadSessions();
+
+        // Load materials on page load
+        loadMaterials();
     </script>
 </body>
 </html>

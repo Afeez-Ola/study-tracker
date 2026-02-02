@@ -34,6 +34,9 @@ from auth import (
     sanitize_username,
 )
 
+# Import material management
+from material_manager import MaterialManager, get_material_manager, ALLOWED_EXTENSIONS
+
 # Configure logging
 logging.basicConfig(
     level=getattr(logging, config.log_level),
@@ -838,6 +841,218 @@ def get_share_text():
     except Exception as e:
         logger.error(f"Error generating share text: {e}")
         return create_error_response("Failed to generate share text", 500)
+
+
+# ==================== STUDY MATERIALS ROUTES ====================
+
+material_manager = MaterialManager()
+
+
+@app.route("/materials/upload", methods=["POST"])
+@require_auth
+def upload_material():
+    """Upload a study material"""
+    try:
+        user_id = get_current_user_id()
+
+        # Check if file is present
+        if "file" not in request.files:
+            return create_error_response("No file provided", 400)
+
+        file = request.files["file"]
+        if file.filename == "":
+            return create_error_response("No file selected", 400)
+
+        # Get form data
+        title = request.form.get("title", "").strip()
+        description = request.form.get("description", "").strip()
+        subject_tags = request.form.get("tags", "").strip()
+        is_public = request.form.get("is_public", "true").lower() == "true"
+
+        if not title:
+            return create_error_response("Title is required", 400)
+
+        # Parse tags
+        tags_list = [tag.strip() for tag in subject_tags.split(",") if tag.strip()]
+
+        # Save material
+        result = material_manager.save_material(
+            user_id=user_id,
+            file=file,
+            title=title,
+            description=description,
+            subject_tags=tags_list,
+            is_public=is_public,
+        )
+
+        if result["success"]:
+            return jsonify(
+                create_success_response(
+                    {
+                        "material_id": result["material_id"],
+                        "title": result["title"],
+                        "file_type": result["file_type"],
+                        "file_size": result["file_size_formatted"],
+                    },
+                    result["message"],
+                )
+            )
+        else:
+            return create_error_response(result["error"], 400)
+
+    except Exception as e:
+        logger.error(f"Error uploading material: {e}")
+        return create_error_response("Upload failed", 500)
+
+
+@app.route("/materials", methods=["GET"])
+@optional_auth
+def list_materials():
+    """List/search study materials"""
+    try:
+        query = request.args.get("q", "").strip()
+        subject = request.args.get("subject", "").strip()
+        tags = request.args.get("tags", "").strip()
+        user_id = request.args.get("user_id", "").strip()
+        limit = min(request.args.get("limit", 50, type=int), 100)
+        offset = max(request.args.get("offset", 0, type=int), 0)
+
+        # Parse tags
+        tags_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else None
+
+        # Search materials
+        materials = material_manager.search_materials(
+            query=query if query else None,
+            subject=subject if subject else None,
+            tags=tags_list,
+            user_id=user_id if user_id else None,
+            only_public=True,
+            limit=limit,
+            offset=offset,
+        )
+
+        return jsonify(
+            create_success_response(
+                {
+                    "materials": materials,
+                    "count": len(materials),
+                    "limit": limit,
+                    "offset": offset,
+                }
+            )
+        )
+
+    except Exception as e:
+        logger.error(f"Error listing materials: {e}")
+        return create_error_response("Failed to retrieve materials", 500)
+
+
+@app.route("/materials/<material_id>", methods=["GET"])
+@optional_auth
+def get_material(material_id):
+    """Get material details"""
+    try:
+        user_id = get_current_user_id()
+
+        material = material_manager.get_material(material_id, user_id)
+
+        if not material:
+            return create_error_response("Material not found", 404)
+
+        return jsonify(create_success_response({"material": material}))
+
+    except Exception as e:
+        logger.error(f"Error getting material: {e}")
+        return create_error_response("Failed to retrieve material", 500)
+
+
+@app.route("/materials/<material_id>/download", methods=["GET"])
+@optional_auth
+def download_material(material_id):
+    """Download a material"""
+    try:
+        user_id = get_current_user_id()
+
+        material = material_manager.get_material(material_id, user_id)
+
+        if not material:
+            return create_error_response("Material not found or access denied", 404)
+
+        file_path = material.get("file_path")
+        if not file_path or not os.path.exists(file_path):
+            return create_error_response("File not found on server", 404)
+
+        # Send file
+        from flask import send_file
+
+        return send_file(
+            file_path,
+            as_attachment=True,
+            download_name=f"{material['title']}{material['file_type']}",
+        )
+
+    except Exception as e:
+        logger.error(f"Error downloading material: {e}")
+        return create_error_response("Download failed", 500)
+
+
+@app.route("/materials/<material_id>", methods=["DELETE"])
+@require_auth
+def delete_material(material_id):
+    """Delete a material (owner only)"""
+    try:
+        user_id = get_current_user_id()
+
+        if material_manager.delete_material(material_id, user_id):
+            return jsonify(
+                create_success_response({"message": "Material deleted successfully"})
+            )
+        else:
+            return create_error_response(
+                "Failed to delete material or not authorized", 403
+            )
+
+    except Exception as e:
+        logger.error(f"Error deleting material: {e}")
+        return create_error_response("Delete failed", 500)
+
+
+@app.route("/materials/<material_id>/rate", methods=["POST"])
+@require_auth
+def rate_material(material_id):
+    """Rate a material"""
+    try:
+        user_id = get_current_user_id()
+
+        if not request.is_json:
+            return create_error_response("Request must be JSON", 400)
+
+        data = request.get_json()
+        rating = data.get("rating", 0)
+        comment = data.get("comment", "").strip()
+
+        if not isinstance(rating, int) or rating < 1 or rating > 5:
+            return create_error_response("Rating must be between 1 and 5", 400)
+
+        if material_manager.rate_material(material_id, user_id, rating, comment):
+            return jsonify(create_success_response({"message": "Rating submitted"}))
+        else:
+            return create_error_response("Failed to submit rating", 500)
+
+    except Exception as e:
+        logger.error(f"Error rating material: {e}")
+        return create_error_response("Rating failed", 500)
+
+
+@app.route("/materials/tags", methods=["GET"])
+def get_popular_tags():
+    """Get popular subject tags"""
+    try:
+        tags = material_manager.get_popular_tags(limit=20)
+        return jsonify(create_success_response({"tags": tags}))
+    except Exception as e:
+        logger.error(f"Error getting tags: {e}")
+        return create_error_response("Failed to get tags", 500)
 
 
 # Health check endpoint
