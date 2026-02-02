@@ -3,8 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Study Tracker - Desktop Edition</title>
+    <title>Study Tracker</title>
     <style>
+        :root {
+            /* Minimalist Light Theme */
+            --bg-primary: #fafafa;
+            --bg-secondary: #ffffff;
+            --bg-tertiary: #f5f5f5;
+            --text-primary: #2c3e50;
+            --text-secondary: #7f8c8d;
+            --text-muted: #95a5a6;
+            --accent-primary: #3498db;
+            --accent-secondary: #2ecc71;
+            --accent-warning: #f39c12;
+            --accent-danger: #e74c3c;
+            --border-color: #ecf0f1;
+            --shadow: 0 2px 8px rgba(0,0,0,0.08);
+            --shadow-hover: 0 4px 16px rgba(0,0,0,0.12);
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -12,368 +29,443 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: #0d1117;
-            color: #c9d1d9;
-            padding: 40px 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
             min-height: 100vh;
+            padding: 20px;
         }
 
         .container {
-            max-width: 1000px;
+            max-width: 800px;
             margin: 0 auto;
         }
 
-        h1 {
-            color: #58a6ff;
-            font-size: 2.5em;
-            margin-bottom: 10px;
+        /* Header - Minimalist */
+        .header {
             text-align: center;
+            margin-bottom: 40px;
+            padding: 20px 0;
         }
 
-        .subtitle {
-            color: #8b949e;
-            font-size: 1.1em;
-            text-align: center;
-            margin-bottom: 30px;
+        .header h1 {
+            font-size: 2rem;
+            font-weight: 300;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
         }
 
-        .db-info {
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            padding: 15px;
+        .header p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            font-weight: 400;
+        }
+
+        /* Cards - Clean & Minimal */
+        .card {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 24px;
             margin-bottom: 20px;
-            text-align: center;
-            color: #8b949e;
-            font-size: 0.9em;
+            box-shadow: var(--shadow);
+            transition: box-shadow 0.3s ease;
         }
 
-        .input-section {
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 8px;
-            padding: 25px;
-            margin-bottom: 20px;
+        .card:hover {
+            box-shadow: var(--shadow-hover);
         }
 
-        .input-label {
-            font-weight: 600;
-            margin-bottom: 10px;
+        /* Input Section */
+        .input-group {
+            margin-bottom: 0;
+        }
+
+        .input-group label {
             display: block;
-            color: #c9d1d9;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
         .input-field {
             width: 100%;
-            padding: 12px;
-            background: #0d1117;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            color: #c9d1d9;
-            font-size: 1em;
+            padding: 14px 16px;
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 1rem;
+            color: var(--text-primary);
+            background: var(--bg-secondary);
+            transition: all 0.2s ease;
         }
 
         .input-field:focus {
             outline: none;
-            border-color: #58a6ff;
+            border-color: var(--accent-primary);
         }
 
-        .timer-section {
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 8px;
-            padding: 40px;
+        .input-field::placeholder {
+            color: var(--text-muted);
+        }
+
+        /* Timer Section - Centered & Clean */
+        .timer-card {
             text-align: center;
-            margin-bottom: 20px;
+            padding: 40px 24px;
         }
 
         .timer-display {
-            font-size: 4em;
-            font-weight: bold;
-            color: #58a6ff;
+            font-size: 3.5rem;
+            font-weight: 200;
+            color: var(--text-primary);
+            font-family: 'SF Mono', Monaco, monospace;
             margin: 20px 0;
+            letter-spacing: 2px;
         }
 
-        .status-text {
-            font-size: 1.2em;
-            color: #8b949e;
-            margin-bottom: 20px;
-        }
-
-        .status-text.active {
-            color: #3fb950;
-        }
-
-        .activity-indicator {
+        .status-indicator {
             display: inline-flex;
             align-items: center;
-            gap: 10px;
-            background: #0d1117;
-            padding: 12px 24px;
-            border-radius: 8px;
-            margin: 20px 0;
+            gap: 8px;
+            padding: 8px 16px;
+            background: var(--bg-tertiary);
+            border-radius: 20px;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 24px;
         }
 
-        .activity-dot {
-            width: 12px;
-            height: 12px;
+        .status-dot {
+            width: 8px;
+            height: 8px;
             border-radius: 50%;
-            background: #30363d;
+            background: var(--text-muted);
+            transition: background 0.3s ease;
         }
 
-        .activity-dot.active {
-            background: #3fb950;
-            animation: pulse 2s infinite;
+        .status-dot.active {
+            background: var(--accent-secondary);
         }
 
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
+        .status-dot.idle {
+            background: var(--accent-warning);
         }
 
-        .controls {
+        /* Buttons - Minimalist */
+        .button-group {
             display: flex;
-            gap: 15px;
+            gap: 12px;
             justify-content: center;
             flex-wrap: wrap;
-            margin: 20px 0;
         }
 
         .btn {
-            padding: 15px 30px;
+            padding: 12px 28px;
             border: none;
             border-radius: 8px;
-            font-size: 1.1em;
-            font-weight: 600;
+            font-size: 0.9rem;
+            font-weight: 500;
             cursor: pointer;
-            transition: all 0.3s;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
         .btn:disabled {
-            opacity: 0.5;
+            opacity: 0.4;
             cursor: not-allowed;
         }
 
-        .btn-start {
-            background: #238636;
+        .btn-primary {
+            background: var(--accent-primary);
             color: white;
         }
 
-        .btn-start:hover:not(:disabled) {
-            background: #2ea043;
+        .btn-primary:hover:not(:disabled) {
+            background: #2980b9;
+            transform: translateY(-1px);
         }
 
-        .btn-pause {
-            background: #bb8009;
+        .btn-secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 2px solid var(--border-color);
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: var(--border-color);
+        }
+
+        .btn-danger {
+            background: var(--accent-danger);
             color: white;
         }
 
-        .btn-pause:hover:not(:disabled) {
-            background: #d29922;
+        .btn-danger:hover:not(:disabled) {
+            background: #c0392b;
         }
 
-        .btn-stop {
-            background: #da3633;
-            color: white;
-        }
-
-        .btn-stop:hover:not(:disabled) {
-            background: #f85149;
-        }
-
+        /* Stats Grid */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 16px;
             margin-bottom: 20px;
         }
 
-        .stat-card {
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 8px;
-            padding: 20px;
+        .stat-item {
             text-align: center;
-        }
-
-        .stat-label {
-            color: #8b949e;
-            font-size: 0.9em;
-            margin-bottom: 10px;
+            padding: 20px;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            box-shadow: var(--shadow);
         }
 
         .stat-value {
-            font-size: 2em;
-            font-weight: bold;
-            color: #58a6ff;
+            font-size: 1.75rem;
+            font-weight: 300;
+            color: var(--accent-primary);
+            margin-bottom: 4px;
         }
 
-        .data-controls {
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Data Controls */
+        .controls-row {
             display: flex;
-            gap: 10px;
+            gap: 12px;
             justify-content: center;
             flex-wrap: wrap;
-            margin: 20px 0;
+            margin-bottom: 20px;
         }
 
-        .btn-data {
+        .btn-small {
             padding: 10px 20px;
-            border: none;
-            border-radius: 6px;
-            font-weight: 600;
-            cursor: pointer;
-            color: white;
+            font-size: 0.8rem;
         }
 
-        .btn-export { background: #238636; }
-        .btn-import { background: #1f6feb; }
-        .btn-stats { background: #8957e5; }
-
-        .btn-data:hover {
-            opacity: 0.8;
-        }
-
+        /* Session History */
         .history-section {
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 8px;
-            padding: 25px;
             margin-top: 20px;
         }
 
-        .history-title {
-            font-size: 1.2em;
-            margin-bottom: 15px;
-            color: #c9d1d9;
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid var(--border-color);
         }
 
-        .session-card {
-            background: #0d1117;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            padding: 15px;
-            margin-bottom: 10px;
+        .session-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
         }
 
-        .session-header {
+        .session-item {
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 16px 20px;
+            box-shadow: var(--shadow);
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 10px;
+            transition: transform 0.2s ease;
         }
 
-        .session-topic {
-            color: #58a6ff;
-            font-weight: 600;
+        .session-item:hover {
+            transform: translateX(4px);
         }
 
-        .session-meta {
-            color: #8b949e;
-            font-size: 0.9em;
+        .session-info h4 {
+            font-size: 1rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .session-info p {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .session-stats {
+            text-align: right;
+        }
+
+        .session-time {
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--text-primary);
         }
 
         .productivity-badge {
             display: inline-block;
-            padding: 4px 12px;
+            padding: 4px 10px;
             border-radius: 12px;
-            font-size: 0.85em;
-            font-weight: 600;
-            margin-left: 10px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            margin-top: 4px;
         }
 
-        .productivity-badge.high {
-            background: rgba(63, 185, 80, 0.2);
-            color: #3fb950;
+        .productivity-high {
+            background: rgba(46, 204, 113, 0.15);
+            color: #27ae60;
         }
 
-        .productivity-badge.medium {
-            background: rgba(187, 128, 9, 0.2);
-            color: #d29922;
+        .productivity-medium {
+            background: rgba(243, 156, 18, 0.15);
+            color: #d68910;
         }
 
-        .productivity-badge.low {
-            background: rgba(248, 81, 73, 0.2);
-            color: #f85149;
+        .productivity-low {
+            background: rgba(231, 76, 60, 0.15);
+            color: #c0392b;
         }
 
-        .warning-box {
-            background: rgba(187, 128, 9, 0.1);
-            border: 1px solid #bb8009;
-            border-radius: 6px;
-            padding: 15px;
+        /* Info Box */
+        .info-box {
+            background: var(--bg-tertiary);
+            border-left: 3px solid var(--accent-primary);
+            padding: 16px 20px;
+            border-radius: 0 8px 8px 0;
             margin: 20px 0;
         }
 
-        .warning-box p {
-            color: #d29922;
-            line-height: 1.6;
+        .info-box p {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
         }
 
+        /* File Input Hidden */
         #importFile {
             display: none;
+        }
+
+        /* Responsive */
+        @media (max-width: 600px) {
+            .timer-display {
+                font-size: 2.5rem;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .session-item {
+                flex-direction: column;
+                text-align: center;
+                gap: 12px;
+            }
+
+            .session-stats {
+                text-align: center;
+            }
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-muted);
+        }
+
+        .empty-state p {
+            font-size: 0.9rem;
+        }
+
+        /* Database Info - Minimal */
+        .db-info {
+            text-align: center;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-bottom: 20px;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>⏱️ Study Tracker - Desktop Edition</h1>
-        <p class="subtitle">System-wide activity tracking with local database storage</p>
+        <!-- Header -->
+        <div class="header">
+            <h1>Study Tracker</h1>
+            <p>Track your productivity and build better habits</p>
+        </div>
 
+        <!-- Database Info -->
         <div class="db-info">
-            📁 Database Location: {{ db_path }}
+            💾 {{ db_path }}
         </div>
 
-        <div class="input-section">
-            <label class="input-label">What are you studying?</label>
-            <input type="text" id="topicInput" class="input-field" placeholder="e.g., Python Programming, Biology Chapter 5">
+        <!-- Topic Input -->
+        <div class="card">
+            <div class="input-group">
+                <label>What are you studying?</label>
+                <input type="text" id="topicInput" class="input-field" placeholder="e.g., React Hooks, Biology Chapter 5">
+            </div>
         </div>
 
-        <div class="timer-section">
+        <!-- Timer Section -->
+        <div class="card timer-card">
             <div class="timer-display" id="timerDisplay">00:00:00</div>
-            <div class="status-text" id="statusText">Ready to start tracking</div>
             
-            <div class="activity-indicator">
-                <div class="activity-dot" id="activityDot"></div>
-                <span id="activityText">Waiting for activity...</span>
+            <div class="status-indicator">
+                <div class="status-dot" id="activityDot"></div>
+                <span id="activityText">Ready to start</span>
             </div>
 
-            <div class="controls">
-                <button class="btn btn-start" id="startBtn" onclick="startSession()">Start Session</button>
-                <button class="btn btn-pause" id="pauseBtn" onclick="pauseSession()" disabled>Pause</button>
-                <button class="btn btn-stop" id="stopBtn" onclick="stopSession()" disabled>Finish Session</button>
+            <div class="button-group">
+                <button class="btn btn-primary" id="startBtn" onclick="startSession()">Start</button>
+                <button class="btn btn-secondary" id="pauseBtn" onclick="pauseSession()" disabled>Pause</button>
+                <button class="btn btn-danger" id="stopBtn" onclick="stopSession()" disabled>Finish</button>
             </div>
 
-            <div class="warning-box">
-                <p><strong>How it works:</strong> The tracker monitors your keyboard and mouse across your ENTIRE computer (not just this browser). If you're idle for more than 3 seconds, it pauses automatically. Only actual work time is counted!</p>
+            <div class="info-box">
+                <p>The tracker monitors your activity across your entire computer. Pauses automatically when you're idle for more than 3 seconds.</p>
             </div>
         </div>
 
+        <!-- Stats -->
         <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-label">Active Time</div>
+            <div class="stat-item">
                 <div class="stat-value" id="activeTime">0m</div>
+                <div class="stat-label">Active</div>
             </div>
-            <div class="stat-card">
-                <div class="stat-label">Idle Time</div>
+            <div class="stat-item">
                 <div class="stat-value" id="idleTime">0m</div>
+                <div class="stat-label">Idle</div>
             </div>
-            <div class="stat-card">
-                <div class="stat-label">Productivity</div>
+            <div class="stat-item">
                 <div class="stat-value" id="productivity">0%</div>
+                <div class="stat-label">Productivity</div>
             </div>
         </div>
 
-        <div class="data-controls">
-            <button class="btn-data btn-export" onclick="exportCSV()">📥 Export to CSV</button>
-            <button class="btn-data btn-import" onclick="document.getElementById('importFile').click()">📤 Import from CSV</button>
-            <button class="btn-data btn-stats" onclick="showStats()">📊 View Stats</button>
+        <!-- Data Controls -->
+        <div class="controls-row">
+            <button class="btn btn-secondary btn-small" onclick="exportCSV()">Export CSV</button>
+            <button class="btn btn-secondary btn-small" onclick="document.getElementById('importFile').click()">Import CSV</button>
+            <button class="btn btn-secondary btn-small" onclick="showStats()">View Stats</button>
             <input type="file" id="importFile" accept=".csv" onchange="importCSV(event)">
         </div>
 
-        <div class="history-section">
-            <div class="history-title">Recent Study Sessions</div>
-            <div id="sessionHistory"></div>
+        <!-- Recent Sessions -->
+        <div class="card history-section">
+            <div class="section-title">Recent Sessions</div>
+            <div id="sessionHistory" class="session-list">
+                <!-- Sessions will be loaded here -->
+            </div>
         </div>
     </div>
 
@@ -383,7 +475,7 @@
         function startSession() {
             const topic = document.getElementById('topicInput').value.trim();
             if (!topic) {
-                alert('Please enter what you\'re studying!');
+                alert('Please enter what you\'re studying');
                 return;
             }
 
@@ -397,8 +489,8 @@
                     document.getElementById('pauseBtn').disabled = false;
                     document.getElementById('stopBtn').disabled = false;
                     document.getElementById('topicInput').disabled = true;
-                    document.getElementById('statusText').textContent = 'Session in progress...';
-                    document.getElementById('statusText').classList.add('active');
+                    document.getElementById('activityText').textContent = 'Session active';
+                    document.getElementById('activityDot').classList.add('active');
                     
                     updateInterval = setInterval(updateStatus, 1000);
                 }
@@ -410,14 +502,19 @@
                 .then(r => r.json())
                 .then(data => {
                     const btn = document.getElementById('pauseBtn');
+                    const dot = document.getElementById('activityDot');
+                    const text = document.getElementById('activityText');
+                    
                     if (data.paused) {
                         btn.textContent = 'Resume';
-                        document.getElementById('statusText').textContent = 'Session paused';
-                        document.getElementById('statusText').classList.remove('active');
+                        dot.classList.remove('active');
+                        dot.classList.add('idle');
+                        text.textContent = 'Session paused';
                     } else {
                         btn.textContent = 'Pause';
-                        document.getElementById('statusText').textContent = 'Session in progress...';
-                        document.getElementById('statusText').classList.add('active');
+                        dot.classList.remove('idle');
+                        dot.classList.add('active');
+                        text.textContent = 'Session active';
                     }
                 });
         }
@@ -434,17 +531,15 @@
                     document.getElementById('pauseBtn').textContent = 'Pause';
                     document.getElementById('topicInput').disabled = false;
                     document.getElementById('topicInput').value = '';
-                    document.getElementById('statusText').textContent = '✓ Session complete! Great work!';
-                    document.getElementById('statusText').classList.remove('active');
-                    document.getElementById('activityDot').classList.remove('active');
-                    document.getElementById('activityText').textContent = 'Waiting for activity...';
+                    document.getElementById('activityText').textContent = 'Session complete!';
+                    document.getElementById('activityDot').classList.remove('active', 'idle');
                     
                     document.getElementById('timerDisplay').textContent = '00:00:00';
                     document.getElementById('activeTime').textContent = '0m';
                     document.getElementById('idleTime').textContent = '0m';
                     document.getElementById('productivity').textContent = '0%';
                     
-                    alert(`Session Saved!\n\nTopic: ${data.topic}\nActive Time: ${data.active_minutes}m\nProductivity: ${data.productivity}%`);
+                    alert(`Session Saved!\n\nTopic: ${data.topic}\nActive: ${data.active_minutes}m\nProductivity: ${data.productivity}%`);
                     
                     loadSessions();
                 });
@@ -470,10 +565,12 @@
                     
                     if (data.currently_active) {
                         dot.classList.add('active');
-                        text.textContent = 'Active - Studying detected!';
+                        dot.classList.remove('idle');
+                        text.textContent = 'Active - studying';
                     } else {
                         dot.classList.remove('active');
-                        text.textContent = 'Idle - No activity detected';
+                        dot.classList.add('idle');
+                        text.textContent = 'Idle - no activity';
                     }
                 });
         }
@@ -483,29 +580,27 @@
                 .then(r => r.json())
                 .then(data => {
                     const container = document.getElementById('sessionHistory');
-                    const sessions = data.sessions || [];  // Extract sessions from response
+                    const sessions = data.sessions || [];
                     
                     if (sessions.length === 0) {
-                        container.innerHTML = '<p style="color: #8b949e; text-align: center;">No sessions yet. Start tracking to build your history!</p>';
+                        container.innerHTML = '<div class="empty-state"><p>No sessions yet. Start tracking to see your history!</p></div>';
                         return;
                     }
                     
-                    container.innerHTML = sessions.map(s => {
-                        let badge_class = 'medium';
-                        if (s.productivity >= 70) badge_class = 'high';
-                        else if (s.productivity < 50) badge_class = 'low';
+                    container.innerHTML = sessions.slice(0, 5).map(s => {
+                        let badgeClass = 'productivity-medium';
+                        if (s.productivity >= 70) badgeClass = 'productivity-high';
+                        else if (s.productivity < 50) badgeClass = 'productivity-low';
                         
                         return `
-                            <div class="session-card">
-                                <div class="session-header">
-                                    <div>
-                                        <span class="session-topic">${s.topic}</span>
-                                        <span class="productivity-badge ${badge_class}">${s.productivity}% productive</span>
-                                    </div>
-                                    <span class="session-meta">${s.date}</span>
+                            <div class="session-item">
+                                <div class="session-info">
+                                    <h4>${s.topic}</h4>
+                                    <p>${s.date} • ${s.active_minutes}m active</p>
                                 </div>
-                                <div class="session-meta">
-                                    Active: ${s.active_minutes}m | Idle: ${s.idle_minutes}m | Total: ${s.total_minutes}m
+                                <div class="session-stats">
+                                    <div class="session-time">${s.total_minutes}m</div>
+                                    <span class="productivity-badge ${badgeClass}">${s.productivity}%</span>
                                 </div>
                             </div>
                         `;
@@ -544,8 +639,8 @@
                     const hours = Math.floor(stats.total_active_minutes / 60);
                     alert(`📊 Your Study Statistics\n\n` +
                           `Total Sessions: ${stats.total_sessions}\n` +
-                          `Total Active Time: ${stats.total_active_minutes} minutes (${hours} hours)\n` +
-                          `Average Productivity: ${stats.avg_productivity}%\n` +
+                          `Total Time: ${stats.total_active_minutes} minutes (${hours} hours)\n` +
+                          `Avg Productivity: ${stats.avg_productivity}%\n` +
                           `Current Streak: ${stats.streak} days 🔥`);
                 });
         }
