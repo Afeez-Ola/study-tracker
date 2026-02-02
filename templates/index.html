@@ -481,8 +481,9 @@
         function loadSessions() {
             fetch('/get_sessions')
                 .then(r => r.json())
-                .then(sessions => {
+                .then(data => {
                     const container = document.getElementById('sessionHistory');
+                    const sessions = data.sessions || [];  // Extract sessions from response
                     
                     if (sessions.length === 0) {
                         container.innerHTML = '<p style="color: #8b949e; text-align: center;">No sessions yet. Start tracking to build your history!</p>';
